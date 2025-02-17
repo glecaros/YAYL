@@ -175,6 +175,30 @@ public class YamlParser
         }
     }
 
+    public T? ParseFile<T>(string yamlFilePath) where T : class
+    {
+        if (!File.Exists(yamlFilePath))
+        {
+            throw new FileNotFoundException($"File not found: {yamlFilePath}");
+        }
+
+        using var reader = new StreamReader(yamlFilePath);
+        var yaml = reader.ReadToEnd();
+        return Parse<T>(yaml);
+    }
+
+    public T? Parse<T>(Stream yamlStream) where T : class
+    {
+        if (yamlStream == null || yamlStream.Length == 0)
+        {
+            return null;
+        }
+
+        using var reader = new StreamReader(yamlStream);
+        var yaml = reader.ReadToEnd();
+        return Parse<T>(yaml);
+    }
+
     public T? Parse<T>(string yaml) where T : class
     {
         if (string.IsNullOrWhiteSpace(yaml))
