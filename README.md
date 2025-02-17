@@ -1,5 +1,8 @@
 # YAYL (Yet Another YAML Library)
 
+![NuGet Version](https://img.shields.io/nuget/v/YAYL)
+
+
 YAYL is a high-level YAML parsing library for .NET that builds on top of YamlDotNet. It provides a clean, intuitive API similar to System.Text.Json, with strong support for C# records and modern language features.
 
 ## Features
