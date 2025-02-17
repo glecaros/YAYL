@@ -1,4 +1,5 @@
-﻿using YAYL.Attributes;
+﻿using System.Text;
+using YAYL.Attributes;
 
 namespace YAYL.Tests;
 
@@ -706,5 +707,41 @@ public class YamlParserTests
         var docWithFooter = (Document.WithFooter)result.Document;
         Assert.Equal("This is a sample document.", docWithFooter.Content);
         Assert.Null(docWithFooter.Footer);
+    }
+
+    public record TestRecord(string Name, int Age);
+
+    [Fact]
+    public void ParseFile_Success()
+    {
+        var yamlContent = "name: Test\nage: 42";
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempFile, yamlContent);
+
+            var result = _parser.ParseFile<TestRecord>(tempFile);
+
+            Assert.NotNull(result);
+            Assert.Equal("Test", result.Name);
+            Assert.Equal(42, result.Age);
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void Parse_Stream_Success()
+    {
+        var yamlContent = "name: StreamUser\nage: 30";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(yamlContent));
+
+        var result = _parser.Parse<TestRecord>(stream);
+
+        Assert.NotNull(result);
+        Assert.Equal("StreamUser", result.Name);
+        Assert.Equal(30, result.Age);
     }
 }

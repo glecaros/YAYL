@@ -47,6 +47,24 @@ var yaml = @"
 var person = parser.Parse<Person>(yaml);
 ```
 
+YAYL also supports parsing YAML from files and streams.
+
+### Parsing from a File
+
+You can directly parse a YAML file:
+```csharp
+var parser = new YamlParser();
+var result = parser.ParseFile<Person>("/path/to/file.yaml");
+```
+
+### Parsing from a Stream
+
+You can parse YAML from any stream:
+```csharp
+using var stream = File.OpenRead("/path/to/file.yaml");
+var result = parser.Parse<Person>(stream);
+```
+
 ## Naming Policies
 
 YAYL supports multiple naming policies for YAML property names:
@@ -185,4 +203,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-YAYL is built on top of [YamlDotNet](https://github.com/aaubry/YamlDotNet), which does the heavy lifting of YAML parsing.n
+YAYL is built on top of [YamlDotNet](https://github.com/aaubry/YamlDotNet), which does the heavy lifting of YAML parsing.
