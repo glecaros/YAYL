@@ -1,0 +1,14 @@
+{
+	"name": "Ubuntu",
+	"image": "mcr.microsoft.com/devcontainers/base:noble",
+	"features": {
+		"ghcr.io/devcontainers/features/dotnet:2": {}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-dotnettools.csdevkit"
+			]
+		}
+	}
+}
