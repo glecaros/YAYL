@@ -25,7 +25,7 @@ jobs:
           NEW_VERSION=${GITHUB_REF#refs/tags/v}
           echo "Updating project version to $NEW_VERSION"
           # Update version in all csproj files; adjust path if necessary
-          sed -i "s|<Version>.*</Version>|<Version>$NEW_VERSION</Version>|g" **/*.csproj
+          sed -i "s|<Version>.*</Version>|<Version>$NEW_VERSION</Version>|g" src/YAYL/YAYL.csproj
       - name: Pack
         run: dotnet pack --no-build --configuration Release -o ./artifacts
       - name: Publish to NuGet
