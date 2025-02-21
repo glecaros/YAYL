@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Text.RegularExpressions;
 using YAYL.Attributes;
 
 namespace YAYL.Tests;
@@ -743,5 +744,39 @@ public class YamlParserTests
         Assert.NotNull(result);
         Assert.Equal("StreamUser", result.Name);
         Assert.Equal(30, result.Age);
+    }
+
+    [Fact]
+    public async Task Parse_VariableResolution_ScalarString_Success()
+    {
+        _parser.AddVariableResolver(new Regex(@"\$\{([^}]+)\}"), (varName) => {
+            return varName == "name" ? "World" : varName;
+        });
+
+        var yaml = "name: Hello, ${name}";
+
+        var result = await _parser.ParseAsync<SingleProp>(yaml);
+
+        Assert.NotNull(result);
+        Assert.Equal("Hello, World", result.Name);
+    }
+
+    record NestedVar(string Info);
+    record ContainerWithNested(NestedVar Nested);
+
+    [Fact]
+    public async Task Parse_VariableResolution_NestedObject_Success()
+    {
+        _parser.AddVariableResolver(new Regex(@"\$\{([^}]+)\}"), (varName) => {
+            return varName == "info" ? "NestedValue" : varName;
+        });
+
+        var yaml = @"
+            nested:
+              info: Value is ${info}";
+        var result = await _parser.ParseAsync<ContainerWithNested>(yaml);
+
+        Assert.NotNull(result);
+        Assert.Equal("Value is NestedValue", result.Nested.Info);
     }
 }

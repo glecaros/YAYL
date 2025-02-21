@@ -193,6 +193,34 @@ catch (YamlParseException ex)
 }
 ```
 
+## Async Support
+
+YAYL offers asynchronous parsing support to help you write non-blocking I/O code.
+
+Example:
+```csharp
+using var stream = File.OpenRead("config.yaml");
+var config = await parser.ParseAsync<Configuration>(stream);
+```
+
+## Variable Resolution
+
+Introduce dynamic value substitution by registering custom variable resolvers.
+This feature allows you to embed placeholders in your YAML that are resolved at parse time.
+
+Example:
+```csharp
+// Register a resolver for "${variable}" syntax
+parser.AddVariableResolver(new Regex(@"\$\{([^}]+)\}"), async (varName, ct) =>
+{
+    // Return a value based on the variable name.
+    return varName == "name" ? "World" : varName;
+});
+
+var person = await parser.ParseAsync<Person>("name: Hello, ${name}");
+// person.Name will be "Hello, World"
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

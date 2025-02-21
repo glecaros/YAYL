@@ -6,6 +6,9 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using YamlDotNet.RepresentationModel;
 using YAYL.Attributes;
 using YAYL.Reflection;
@@ -15,6 +18,7 @@ namespace YAYL;
 public class YamlParser
 {
     private readonly JsonNamingPolicy _namingPolicy;
+    private readonly List<YamlVariableResolver> _variableResolvers = new();
 
     public YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCaseLower)
     {
@@ -28,6 +32,13 @@ public class YamlParser
             _ => throw new ArgumentOutOfRangeException(nameof(namingPolicy), namingPolicy, null),
         };
     }
+
+    public void AddVariableResolver(Regex expression, Func<string, CancellationToken, Task<string>> resolver)
+    {
+        _variableResolvers.Add(new YamlVariableResolver(expression, resolver));
+    }
+
+    public void AddVariableResolver(Regex expression, Func<string, string> resolver) => AddVariableResolver(expression, (v, _) => Task.FromResult(resolver(v)));
 
     private string GetYamlPropertyName(MemberInfo member)
     {
@@ -68,7 +79,7 @@ public class YamlParser
         return derivedTypeAttribute.DerivedType;
     }
 
-    private Dictionary<string, (PropertyInfo PropertyInfo, object? Value)> GetPropertyValues(Type type, YamlMappingNode mappingNode)
+    private async Task<Dictionary<string, (PropertyInfo PropertyInfo, object? Value)>> GetPropertyValuesAsync(Type type, YamlMappingNode mappingNode, CancellationToken cancellationToken)
     {
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
@@ -85,7 +96,7 @@ public class YamlParser
             }
             else if (propertyNode.Value != null)
             {
-                var value = ConvertYamlNode(propertyNode.Value, property.PropertyType);
+                var value = await ConvertYamlNodeAsync(propertyNode.Value, property.PropertyType, cancellationToken).ConfigureAwait(false);
                 propertyValues[property.Name] = (property, value);
             }
             else if ((Nullable.GetUnderlyingType(property.PropertyType) != null) || property.IsNullableReferenceType())
@@ -109,17 +120,17 @@ public class YamlParser
         return target;
     }
 
-    private T? ParseNodeWithDefaultConstructor<T>(YamlNode node, Type type) where T : class
+    private async Task<T?> ParseNodeWithDefaultConstructorAsync<T>(YamlNode node, Type type, CancellationToken cancellationToken) where T : class
     {
         if (node is not YamlMappingNode mappingNode)
         {
             throw new YamlParseException($"Expected mapping node for type {type.Name}");
         }
 
-        return SetPropertyValues((T?)Activator.CreateInstance(type), GetPropertyValues(type, mappingNode));
+        return SetPropertyValues((T?)Activator.CreateInstance(type), await GetPropertyValuesAsync(type, mappingNode, cancellationToken).ConfigureAwait(false));
     }
 
-    private T? ParseNodeWithoutDefaultConstructor<T>(YamlNode node, Type type, ConstructorInfo constructorInfo) where T : class
+    private async Task<T?> ParseNodeWithoutDefaultConstructorAsync<T>(YamlNode node, Type type, ConstructorInfo constructorInfo, CancellationToken cancellationToken) where T : class
     {
         if (node is not YamlMappingNode mappingNode)
         {
@@ -130,7 +141,7 @@ public class YamlParser
         var args = new object?[parameters.Length];
         var missingRequired = new List<string>();
 
-        var propertyValues = GetPropertyValues(type, mappingNode);
+        var propertyValues = await GetPropertyValuesAsync(type, mappingNode, cancellationToken).ConfigureAwait(false);
 
         for (int i = 0; i < parameters.Length; i++)
         {
@@ -175,7 +186,7 @@ public class YamlParser
         }
     }
 
-    public T? ParseFile<T>(string yamlFilePath) where T : class
+    public async Task<T?> ParseFileAsync<T>(string yamlFilePath, CancellationToken cancellationToken = default) where T : class
     {
         if (!File.Exists(yamlFilePath))
         {
@@ -183,11 +194,16 @@ public class YamlParser
         }
 
         using var reader = new StreamReader(yamlFilePath);
-        var yaml = reader.ReadToEnd();
-        return Parse<T>(yaml);
+        var yaml = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        return await ParseAsync<T>(yaml, cancellationToken).ConfigureAwait(false);
     }
 
-    public T? Parse<T>(Stream yamlStream) where T : class
+    public T? ParseFile<T>(string yamlFilePath) where T : class
+    {
+        return ParseFileAsync<T>(yamlFilePath).GetAwaiter().GetResult();
+    }
+
+    public async Task<T?> ParseAsync<T>(Stream yamlStream, CancellationToken cancellationToken = default) where T : class
     {
         if (yamlStream == null || yamlStream.Length == 0)
         {
@@ -195,11 +211,16 @@ public class YamlParser
         }
 
         using var reader = new StreamReader(yamlStream);
-        var yaml = reader.ReadToEnd();
-        return Parse<T>(yaml);
+        var yaml = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        return await ParseAsync<T>(yaml, cancellationToken).ConfigureAwait(false);
     }
 
-    public T? Parse<T>(string yaml) where T : class
+    public T? Parse<T>(Stream yamlStream) where T : class
+    {
+        return ParseAsync<T>(yamlStream).GetAwaiter().GetResult();
+    }
+
+    public async Task<T?> ParseAsync<T>(string yaml, CancellationToken cancellationToken = default) where T : class
     {
         if (string.IsNullOrWhiteSpace(yaml))
         {
@@ -218,7 +239,7 @@ public class YamlParser
             }
 
             var rootNode = yamlStream.Documents[0].RootNode;
-            return (T?)ConvertYamlNode(rootNode, typeof(T));
+            return (T?)await ConvertYamlNodeAsync(rootNode, typeof(T), cancellationToken).ConfigureAwait(false);
         }
         catch (YamlDotNet.Core.YamlException ex)
         {
@@ -234,7 +255,12 @@ public class YamlParser
         }
     }
 
-    private T? ParseNode<T>(YamlNode node) where T : class
+    public T? Parse<T>(string yaml) where T : class
+    {
+        return ParseAsync<T>(yaml).GetAwaiter().GetResult();
+    }
+
+    private async Task<T?> ParseNodeAsync<T>(YamlNode node, CancellationToken cancellationToken) where T : class
     {
         var baseType = typeof(T);
 
@@ -263,37 +289,44 @@ public class YamlParser
                 throw new YamlParseException(
                     $"Only types with a single constructor are supported. {baseType.Name} has {constructors.Length} constructors.");
             }
-            return ParseNodeWithoutDefaultConstructor<T>(node, baseType, constructors[0]);
+            return await ParseNodeWithoutDefaultConstructorAsync<T>(node, baseType, constructors[0], cancellationToken).ConfigureAwait(false);
         }
 
-        return ParseNodeWithDefaultConstructor<T>(node, baseType);
+        return await ParseNodeWithDefaultConstructorAsync<T>(node, baseType, cancellationToken).ConfigureAwait(false);
     }
 
-    private object? ConvertYamlNode(YamlNode node, Type targetType)
+    private async Task<object?> ConvertYamlNodeAsync(YamlNode node, Type targetType, CancellationToken cancellationToken)
     {
         switch (node)
         {
             case YamlScalarNode scalarNode:
                 {
-                    return ConvertScalarNode(scalarNode, targetType);
+                    return await ConvertScalarNodeAsync(scalarNode, targetType, cancellationToken).ConfigureAwait(false);
                 }
             case YamlSequenceNode sequenceNode:
                 {
-                    return ConvertSequenceNode(sequenceNode, targetType);
+                    return await ConvertSequenceNodeAsync(sequenceNode, targetType, cancellationToken).ConfigureAwait(false);
                 }
             case YamlMappingNode mappingNode:
                 {
                     if (targetType.IsDictionary())
                     {
-                        return ConvertToDictionary(mappingNode, targetType);
+                        return await ConvertToDictionaryAsync(mappingNode, targetType, cancellationToken).ConfigureAwait(false);
                     }
                     else if (targetType.IsClass)
                     {
-                        var method = typeof(YamlParser).GetMethod(nameof(ParseNode),
+                        var method = typeof(YamlParser).GetMethod(nameof(ParseNodeAsync),
                             BindingFlags.NonPublic | BindingFlags.Instance)!;
                         var genericMethod = method.MakeGenericMethod(targetType);
-                        var result = genericMethod.Invoke(this, [mappingNode]);
+                        var task = genericMethod.Invoke(this, [mappingNode, cancellationToken]);
+                        if (task is not Task t)
+                        {
+                            throw new YamlParseException($"Failed to parse object of type {targetType.Name}");
+                        }
+                        await t.ConfigureAwait(false);
 
+                        var resultProperty = t.GetType().GetProperty("Result");
+                        var result = resultProperty?.GetValue(t);
                         if (result == null)
                         {
                             throw new YamlParseException($"Failed to parse nested object of type {targetType.Name}");
@@ -308,9 +341,29 @@ public class YamlParser
         throw new YamlParseException($"Unsupported YAML node type for target type {targetType.Name}");
     }
 
-    private object? ConvertScalarNode(YamlScalarNode node, Type targetType)
+    private async Task<string?> ResolveVariablesInStringAsync(string value, CancellationToken cancellationToken)
     {
-        var value = node.Value;
+        foreach (var (expression, resolver) in _variableResolvers)
+        {
+            var matches = expression.Matches(value);
+            foreach (Match match in matches)
+            {
+                var variable = match.Groups[1].Value;
+                var resolvedValue = await resolver(variable, cancellationToken).ConfigureAwait(false);
+                value = value.Replace(match.Value, resolvedValue);
+            }
+        }
+
+        return value;
+    }
+
+    private async Task<object?> ConvertScalarNodeAsync(YamlScalarNode node, Type targetType, CancellationToken cancellationToken)
+    {
+        var value = node.Value switch
+        {
+            string v => await ResolveVariablesInStringAsync(v, cancellationToken).ConfigureAwait(false),
+            _ => node.Value,
+        };
 
         try
         {
@@ -364,7 +417,7 @@ public class YamlParser
         }
     }
 
-    private object ConvertToArray(YamlSequenceNode node, Type targetType)
+    private async Task<object> ConvertToArrayAsync(YamlSequenceNode node, Type targetType, CancellationToken cancellationToken)
     {
         if (!targetType.IsArray)
         {
@@ -378,7 +431,8 @@ public class YamlParser
         {
             try
             {
-                array.SetValue(ConvertYamlNode(node.Children[i], elementType), i);
+                var value = await ConvertYamlNodeAsync(node.Children[i], elementType, cancellationToken).ConfigureAwait(false);
+                array.SetValue(value, i);
             }
             catch (Exception ex)
             {
@@ -389,16 +443,16 @@ public class YamlParser
         return array;
     }
 
-    private object ConvertSequenceNode(YamlSequenceNode node, Type targetType)
+    private async Task<object> ConvertSequenceNodeAsync(YamlSequenceNode node, Type targetType, CancellationToken cancellationToken)
     {
         if (targetType.IsArray)
         {
-            return ConvertToArray(node, targetType);
+            return await ConvertToArrayAsync(node, targetType, cancellationToken).ConfigureAwait(false);
         }
 
         if (IsGenericCollection(targetType))
         {
-            return ConvertToGenericCollection(node, targetType);
+            return await ConvertToGenericCollectionAsync(node, targetType, cancellationToken).ConfigureAwait(false);
         }
 
         throw new YamlParseException($"Cannot convert sequence to type: {targetType.Name}");
@@ -414,7 +468,7 @@ public class YamlParser
         );
     }
 
-    private object ConvertToGenericCollection(YamlSequenceNode node, Type targetType)
+    private async Task<object> ConvertToGenericCollectionAsync(YamlSequenceNode node, Type targetType, CancellationToken cancellationToken)
     {
         var elementType = targetType.GetGenericArguments()[0];
         var listType = typeof(List<>).MakeGenericType(elementType);
@@ -422,7 +476,8 @@ public class YamlParser
 
         foreach (var child in node.Children)
         {
-            list.Add(ConvertYamlNode(child, elementType));
+            var value = await ConvertYamlNodeAsync(child, elementType, cancellationToken).ConfigureAwait(false);
+            list.Add(value);
         }
 
         if (targetType.GetGenericTypeDefinition() == typeof(List<>) ||
@@ -434,7 +489,7 @@ public class YamlParser
         return list;
     }
 
-    private object ConvertToDictionary(YamlMappingNode node, Type type)
+    private async Task<object> ConvertToDictionaryAsync(YamlMappingNode node, Type type, CancellationToken cancellationToken)
     {
         var dict = Activator.CreateInstance(type)!;
         var valueType = type.GenericTypeArguments[1];
@@ -442,7 +497,8 @@ public class YamlParser
         {
             if (child.Key is YamlScalarNode keyNode && child.Value is YamlNode valueNode)
             {
-                type.InvokeMember("Add", BindingFlags.InvokeMethod, null, dict, [keyNode.Value!, ConvertYamlNode(valueNode, valueType)]);
+                var value = await ConvertYamlNodeAsync(valueNode, valueType, cancellationToken).ConfigureAwait(false);
+                type.InvokeMember("Add", BindingFlags.InvokeMethod, null, dict, [keyNode.Value!, value]);
             }
             else
             {
