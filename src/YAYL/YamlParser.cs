@@ -211,7 +211,7 @@ public class YamlParser
         }
 
         using var reader = new StreamReader(yamlStream);
-        var yaml = await reader.ReadToEndAsync();
+        var yaml = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
         return await ParseAsync<T>(yaml, cancellationToken).ConfigureAwait(false);
     }
 
