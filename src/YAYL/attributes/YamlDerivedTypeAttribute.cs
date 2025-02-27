@@ -13,4 +13,10 @@ public class YamlDerivedTypeAttribute : Attribute
         TypeName = typeName;
         DerivedType = derivedType;
     }
+
+    public void Deconstruct(out string typeName, out Type derivedType)
+    {
+        typeName = TypeName;
+        derivedType = DerivedType;
+    }
 }

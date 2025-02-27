@@ -71,12 +71,17 @@ public class YamlParser
         var derivedTypeAttribute = baseType.GetCustomAttributes<YamlDerivedTypeAttribute>()
             .FirstOrDefault(x => NormalizeEnumValueName(x.TypeName) == typeName);
 
-        if (derivedTypeAttribute == null)
+        if (derivedTypeAttribute is not (var _, var derivedType))
         {
             throw new YamlParseException($"No derived type found for discriminator value '{typeName}'");
         }
 
-        return derivedTypeAttribute.DerivedType;
+        if (derivedType.IsAbstract)
+        {
+            return GetPolymorphicType(node, derivedType);
+        }
+
+        return derivedType;
     }
 
     private async Task<Dictionary<string, (PropertyInfo PropertyInfo, object? Value)>> GetPropertyValuesAsync(Type type, YamlMappingNode mappingNode, CancellationToken cancellationToken)
@@ -502,7 +507,7 @@ public class YamlParser
             }
             else
             {
-                throw new YamlParseException("Dictionary values must be scalar values");
+                throw new YamlParseException("Dictionary keys must be scalar values");
             }
         }
 
