@@ -1,11 +1,14 @@
 # Changelog
 
-## [1.2.0] - Unreleased
+## [1.2.0] - 2025-02-28
 
 ### Added
 
 - **Nested Polymorphic Types:** Added support for hierarchical type resolution with multiple levels of polymorphic types
 
+### Fixed
+
+- **Fixing issue with streams:** Fixed the way streams are handled.
 
 ## [1.1.0] - 2025-02-20
 

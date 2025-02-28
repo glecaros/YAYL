@@ -46,10 +46,7 @@ public class YamlParser
         return attribute?.Name ?? _namingPolicy.ConvertName(member.Name);
     }
 
-    private string? NormalizeEnumValueName(string? value)
-    {
-        return value?.Replace("-", "").Replace("_", "").ToLowerInvariant();
-    }
+    private string? NormalizeEnumValueName(string? value) => value?.Replace("-", "").Replace("_", "").ToLowerInvariant();
 
     private Type? GetPolymorphicType(YamlMappingNode node, Type baseType)
     {
@@ -208,16 +205,15 @@ public class YamlParser
         return ParseFileAsync<T>(yamlFilePath).GetAwaiter().GetResult();
     }
 
-    public async Task<T?> ParseAsync<T>(Stream yamlStream, CancellationToken cancellationToken = default) where T : class
+    public Task<T?> ParseAsync<T>(Stream yamlStream, CancellationToken cancellationToken = default) where T : class
     {
-        if (yamlStream == null || yamlStream.Length == 0)
+        if (yamlStream == null)
         {
-            return null;
+            return Task.FromResult<T?>(null);
         }
 
         using var reader = new StreamReader(yamlStream);
-        var yaml = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        return await ParseAsync<T>(yaml, cancellationToken).ConfigureAwait(false);
+        return ParseAsync<T>(reader, cancellationToken);
     }
 
     public T? Parse<T>(Stream yamlStream) where T : class
@@ -225,18 +221,23 @@ public class YamlParser
         return ParseAsync<T>(yamlStream).GetAwaiter().GetResult();
     }
 
-    public async Task<T?> ParseAsync<T>(string yaml, CancellationToken cancellationToken = default) where T : class
+    public Task<T?> ParseAsync<T>(string yaml, CancellationToken cancellationToken = default) where T : class
     {
         if (string.IsNullOrWhiteSpace(yaml))
         {
-            return null;
+            return Task.FromResult<T?>(null);
         }
 
+        using var input = new StringReader(yaml);
+        return ParseAsync<T>(input, cancellationToken);
+    }
+
+    private async Task<T?> ParseAsync<T>(TextReader reader, CancellationToken cancellationToken) where T : class
+    {
         try
         {
-            using var input = new StringReader(yaml);
             var yamlStream = new YamlStream();
-            yamlStream.Load(input);
+            yamlStream.Load(reader);
 
             if (!yamlStream.Documents.Any())
             {
