@@ -192,7 +192,7 @@ public class YamlParser
     {
         if (!File.Exists(yamlFilePath))
         {
-            throw new FileNotFoundException($"File not found: {yamlFilePath}");
+            throw new YamlParseException($"File not found: {yamlFilePath}");
         }
 
         using var reader = new StreamReader(yamlFilePath);
