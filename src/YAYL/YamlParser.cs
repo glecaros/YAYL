@@ -5,7 +5,6 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,23 +14,10 @@ using YAYL.Reflection;
 
 namespace YAYL;
 
-public class YamlParser
+public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCaseLower)
 {
-    private readonly JsonNamingPolicy _namingPolicy;
-    private readonly List<YamlVariableResolver> _variableResolvers = new();
-
-    public YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCaseLower)
-    {
-        _namingPolicy = namingPolicy switch
-        {
-            YamlNamingPolicy.KebabCaseLower => JsonNamingPolicy.KebabCaseLower,
-            YamlNamingPolicy.KebabCaseUpper => JsonNamingPolicy.KebabCaseUpper,
-            YamlNamingPolicy.CamelCase => JsonNamingPolicy.CamelCase,
-            YamlNamingPolicy.SnakeCaseLower => JsonNamingPolicy.SnakeCaseLower,
-            YamlNamingPolicy.SnakeCaseUpper => JsonNamingPolicy.SnakeCaseUpper,
-            _ => throw new ArgumentOutOfRangeException(nameof(namingPolicy), namingPolicy, null),
-        };
-    }
+    private readonly YamlNamingPolicy _namingPolicy = namingPolicy;
+    private readonly List<YamlVariableResolver> _variableResolvers = [];
 
     public void AddVariableResolver(Regex expression, Func<string, CancellationToken, Task<string>> resolver)
     {
@@ -39,12 +25,6 @@ public class YamlParser
     }
 
     public void AddVariableResolver(Regex expression, Func<string, string> resolver) => AddVariableResolver(expression, (v, _) => Task.FromResult(resolver(v)));
-
-    private string GetYamlPropertyName(MemberInfo member)
-    {
-        var attribute = member.GetCustomAttribute<YamlPropertyNameAttribute>();
-        return attribute?.Name ?? _namingPolicy.ConvertName(member.Name);
-    }
 
     private string? NormalizeEnumValueName(string? value) => value?.Replace("-", "").Replace("_", "").ToLowerInvariant();
 
@@ -88,7 +68,7 @@ public class YamlParser
         Dictionary<string, (PropertyInfo PropertyInfo, object? Value)> propertyValues = new();
         foreach (var property in properties)
         {
-            var yamlPropertyName = GetYamlPropertyName(property);
+            var yamlPropertyName = _namingPolicy.GetPropertyName(property);
             var propertyNode = mappingNode.Children
                 .FirstOrDefault(x => ((YamlScalarNode)x.Key).Value == yamlPropertyName);
 
@@ -321,18 +301,16 @@ public class YamlParser
                     }
                     else if (targetType.IsClass)
                     {
-                        var method = typeof(YamlParser).GetMethod(nameof(ParseNodeAsync),
-                            BindingFlags.NonPublic | BindingFlags.Instance)!;
-                        var genericMethod = method.MakeGenericMethod(targetType);
-                        var task = genericMethod.Invoke(this, [mappingNode, cancellationToken]);
-                        if (task is not Task t)
-                        {
-                            throw new YamlParseException($"Failed to parse object of type {targetType.Name}");
-                        }
-                        await t.ConfigureAwait(false);
+                        var task = this.CallGenericMethod<Task>(
+                            methodName: nameof(ParseNodeAsync),
+                            flags: BindingFlags.NonPublic | BindingFlags.Instance,
+                            typeArguments: [targetType],
+                            parameters: [mappingNode, cancellationToken]
+                        );
+                        await task.ConfigureAwait(false);
 
-                        var resultProperty = t.GetType().GetProperty("Result");
-                        var result = resultProperty?.GetValue(t);
+                        var resultProperty = task.GetType().GetProperty("Result");
+                        var result = resultProperty?.GetValue(task);
                         if (result == null)
                         {
                             throw new YamlParseException($"Failed to parse nested object of type {targetType.Name}");
