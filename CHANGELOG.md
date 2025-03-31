@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0] - 2025-03-31
+
+### Added
+
+- **Serializer:** Added serializer object.
+
+## [1.2.1] - 2025-03-21
+
+### Fixed
+
+- **File not found exception:** Parse properly throws a `YamlParseException` when the file received does not exist.
+
 ## [1.2.0] - 2025-02-28
 
 ### Added
