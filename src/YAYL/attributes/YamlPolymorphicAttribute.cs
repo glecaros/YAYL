@@ -3,12 +3,12 @@ using System;
 namespace YAYL.Attributes;
 
 [AttributeUsage(AttributeTargets.Class)]
-public class YamlPolymorphicAttribute : Attribute
+public class YamlPolymorphicAttribute(string typeDiscriminatorPropertyName) : Attribute
 {
-    public string TypeDiscriminatorPropertyName { get; }
+    public string TypeDiscriminatorPropertyName { get; } = typeDiscriminatorPropertyName;
 
-    public YamlPolymorphicAttribute(string typeDiscriminatorPropertyName)
+    public void Deconstruct(out string typeDiscriminatorPropertyName)
     {
-        TypeDiscriminatorPropertyName = typeDiscriminatorPropertyName;
+        typeDiscriminatorPropertyName = TypeDiscriminatorPropertyName;
     }
 }
