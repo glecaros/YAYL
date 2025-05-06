@@ -306,4 +306,32 @@ public partial class YamlParserTests
         Assert.Equal("mammal", mammal.AnimalClass);
         Assert.Equal("Dog", mammal.Species);
     }
+
+    [YamlPolymorphic("type")]
+    [YamlDerivedType("string", typeof(StringType))]
+    [YamlDerivedTypeDefault(typeof(RefType))]
+    abstract record SchemaType;
+
+    record StringType(string Pattern) : SchemaType;
+    record RefType([property:YamlPropertyName("$ref")] string Ref) : SchemaType;
+
+    [Fact]
+    public void Parse_PolymorphicDefault_Success()
+    {
+        var yaml = @"
+            - type: string
+              pattern: ^[a-zA-Z0-9]+$
+            - $ref: '#/components/schemas/Cat'";
+
+        var result = _parser.Parse<SchemaType[]>(yaml);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.Length);
+        Assert.IsType<StringType>(result[0]);
+        var stringType = (StringType)result[0];
+        Assert.Equal("^[a-zA-Z0-9]+$", stringType.Pattern);
+        Assert.IsType<RefType>(result[1]);
+        var refType = (RefType)result[1];
+        Assert.Equal("#/components/schemas/Cat", refType.Ref);
+    }
 }

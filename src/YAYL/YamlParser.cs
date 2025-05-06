@@ -41,6 +41,14 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 
         if (discriminatorNode.Value is not YamlScalarNode typeNode)
         {
+            if (baseType.GetCustomAttribute<YamlDerivedTypeDefaultAttribute>() is {DerivedType: var defaultDerivedType})
+            {
+                if (defaultDerivedType.IsAbstract)
+                {
+                    return GetPolymorphicType(node, defaultDerivedType);
+                }
+                return defaultDerivedType;
+            }
             throw new YamlParseException($"Type discriminator '{polymorphicAttribute.TypeDiscriminatorPropertyName}' not found or invalid");
         }
 

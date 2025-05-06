@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.4.0] - 2025-05-05
+
+- **YamlDerivedTypeDefaultAttribute:** Adding attribute to enable fallback type for discriminated type.
+
 ## [1.3.0] - 2025-03-31
 
 ### Added
