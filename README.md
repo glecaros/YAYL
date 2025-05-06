@@ -193,6 +193,27 @@ var yaml = serializer.Serialize(shape);
 // radius: 5
 ```
 
+The library also supports fallback types for when the discriminator is not available.
+
+```csharp
+[YamlPolymorphic("type")]
+[YamlDerivedType("string", typeof(StringType))]
+[YamlDerivedTypeDefault(typeof(RefType))]
+public abstract record SchemaType;
+
+public record StringType(string Pattern) : SchemaType;
+public record RefType([property:YamlPropertyName("$ref")] string Ref) : SchemaType;
+
+var yaml = @"
+    - type: string
+        pattern: ^[a-zA-Z0-9]+$
+    - $ref: '#/components/schemas/Cat'";
+
+var types = parser.Parse<SchemaType[]>(yaml);
+// types[0] contains a StringType
+// types[1] contains a RefType
+```
+
 ## Enum Support
 
 YAYL provides elegant handling of enums in polymorphic types:
