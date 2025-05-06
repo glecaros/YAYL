@@ -193,7 +193,7 @@ var yaml = serializer.Serialize(shape);
 // radius: 5
 ```
 
-The library also supports fallback types for when the discriminantor is not available.
+The library also supports fallback types for when the discriminator is not available.
 
 ```csharp
 [YamlPolymorphic("type")]
