@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.5.0] - 2025-05-09
+
+- **Parser support for Sets:** Adding support for parsing set types (`ISet<T>`, `HashSet<T>`, and `SortedSet<T>`)
+
 ## [1.4.0] - 2025-05-05
 
 - **YamlDerivedTypeDefaultAttribute:** Adding attribute to enable fallback type for discriminated type.
