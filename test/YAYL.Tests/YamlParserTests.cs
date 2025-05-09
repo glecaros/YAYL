@@ -336,7 +336,10 @@ public partial class YamlParserTests
         List<string> StringList,
         IList<int> IntList,
         ICollection<double> DoubleCollection,
-        IEnumerable<bool> BoolEnumerable
+        IEnumerable<bool> BoolEnumerable,
+        ISet<string> StringSet,
+        HashSet<string> StringHashSet,
+        SortedSet<string> StringSortedSet
     );
 
     [Fact]
@@ -354,7 +357,16 @@ public partial class YamlParserTests
                 - 2.2
             bool-enumerable:
                 - true
-                - false";
+                - false
+            string-set:
+                - one
+                - two
+            string-hash-set:
+                - three
+                - four
+            string-sorted-set:
+                - five
+                - six";
 
         var result = _parser.Parse<ListContainer>(yaml);
 
@@ -363,6 +375,9 @@ public partial class YamlParserTests
         Assert.Equal([1, 2], result.IntList);
         Assert.Equal([1.1, 2.2], result.DoubleCollection);
         Assert.Equal([true, false], result.BoolEnumerable);
+        Assert.Equal(["one", "two"], result.StringSet);
+        Assert.Equal(["three", "four"], result.StringHashSet);
+        Assert.Equal(["five", "six"], result.StringSortedSet);
     }
 
     record RequiredProps(bool Required);

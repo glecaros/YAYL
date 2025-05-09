@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -442,43 +441,52 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             return await ConvertToArrayAsync(node, targetType, cancellationToken).ConfigureAwait(false);
         }
 
-        if (IsGenericCollection(targetType))
+        if (GetGenericCollection(targetType) is Type genericType)
         {
-            return await ConvertToGenericCollectionAsync(node, targetType, cancellationToken).ConfigureAwait(false);
+            return await ConvertToGenericCollectionAsync(node, genericType, targetType, cancellationToken).ConfigureAwait(false);
         }
 
         throw new YamlParseException($"Cannot convert sequence to type: {targetType.Name}");
     }
 
-    private bool IsGenericCollection(Type type)
+    private static Type? GetGenericCollection(Type type) => type.IsGenericType switch
     {
-        return type.IsGenericType && (
-            type.GetGenericTypeDefinition() == typeof(List<>) ||
-            type.GetGenericTypeDefinition() == typeof(IList<>) ||
-            type.GetGenericTypeDefinition() == typeof(ICollection<>) ||
-            type.GetGenericTypeDefinition() == typeof(IEnumerable<>)
-        );
+        true => type.GetGenericTypeDefinition() switch
+        {
+            var t when t == typeof(List<>) => t,
+            var t when t == typeof(IList<>) => typeof(List<>),
+            var t when t == typeof(ICollection<>) => typeof(List<>),
+            var t when t == typeof(IEnumerable<>) => typeof(List<>),
+            var t when t == typeof(ISet<>) => typeof(HashSet<>),
+            var t when t == typeof(HashSet<>) => typeof(HashSet<>),
+            var t when t == typeof(SortedSet<>) => typeof(SortedSet<>),
+            _ => null
+        },
+        false => null,
+    };
+
+    private static bool AddToGenericCollection<T>(ICollection<T> collection, T value)
+    {
+        collection.Add(value);
+        return true;
     }
 
-    private async Task<object> ConvertToGenericCollectionAsync(YamlSequenceNode node, Type targetType, CancellationToken cancellationToken)
+    private async Task<object> ConvertToGenericCollectionAsync(YamlSequenceNode node, Type genericCollectionType, Type targetType, CancellationToken cancellationToken)
     {
         var elementType = targetType.GetGenericArguments()[0];
-        var listType = typeof(List<>).MakeGenericType(elementType);
-        var list = (IList)Activator.CreateInstance(listType)!;
-
+        var collectionType = genericCollectionType.MakeGenericType(elementType);
+        var collection = Activator.CreateInstance(collectionType)!;
         foreach (var child in node.Children)
         {
             var value = await ConvertYamlNodeAsync(child, elementType, cancellationToken).ConfigureAwait(false);
-            list.Add(value);
+            this.CallGenericMethod<bool>(
+                methodName: nameof(AddToGenericCollection),
+                flags: BindingFlags.NonPublic | BindingFlags.Static,
+                typeArguments: [elementType],
+                parameters: [collection, value]
+            );
         }
-
-        if (targetType.GetGenericTypeDefinition() == typeof(List<>) ||
-            targetType.GetGenericTypeDefinition() == typeof(IList<>))
-        {
-            return list;
-        }
-
-        return list;
+        return collection;
     }
 
     private async Task<object> ConvertToDictionaryAsync(YamlMappingNode node, Type type, CancellationToken cancellationToken)
