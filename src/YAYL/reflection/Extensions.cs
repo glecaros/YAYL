@@ -57,4 +57,20 @@ internal static class Extensions
         var attributeType = attribute.GetType();
         return attributeType.IsGenericType && attributeType.GetGenericTypeDefinition() == typeof(YamlDerivedTypeEnumAttribute<>);
     }
+
+    public static Type? GetGenericCollection(this Type type) => type.IsGenericType switch
+    {
+        true => type.GetGenericTypeDefinition() switch
+        {
+            var t when t == typeof(List<>) => t,
+            var t when t == typeof(IList<>) => typeof(List<>),
+            var t when t == typeof(ICollection<>) => typeof(List<>),
+            var t when t == typeof(IEnumerable<>) => typeof(List<>),
+            var t when t == typeof(ISet<>) => typeof(HashSet<>),
+            var t when t == typeof(HashSet<>) => typeof(HashSet<>),
+            var t when t == typeof(SortedSet<>) => typeof(SortedSet<>),
+            _ => null
+        },
+        false => null,
+    };
 }
