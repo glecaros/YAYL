@@ -3,7 +3,7 @@
 ## [1.6.0] - 2025-05-11
 
 - **Adding YamlContext**: New configuration object that can be provided to parse operations.
-- **Adding YamlPathFieldAttribute**: New attribute that to resolve paths to absolute during parse time.
+- **Adding YamlPathFieldAttribute**: New attribute that resolves file paths to absolute paths during parsing.
 
 ## [1.5.0] - 2025-05-09
 
