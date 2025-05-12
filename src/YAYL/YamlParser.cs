@@ -471,29 +471,13 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             return await ConvertToArrayAsync(node, targetType, context, cancellationToken).ConfigureAwait(false);
         }
 
-        if (GetGenericCollection(targetType) is Type genericType)
+        if (targetType.GetGenericCollection() is Type genericType)
         {
             return await ConvertToGenericCollectionAsync(node, genericType, targetType, context, cancellationToken).ConfigureAwait(false);
         }
 
         throw new YamlParseException($"Cannot convert sequence to type: {targetType.Name}");
     }
-
-    private static Type? GetGenericCollection(Type type) => type.IsGenericType switch
-    {
-        true => type.GetGenericTypeDefinition() switch
-        {
-            var t when t == typeof(List<>) => t,
-            var t when t == typeof(IList<>) => typeof(List<>),
-            var t when t == typeof(ICollection<>) => typeof(List<>),
-            var t when t == typeof(IEnumerable<>) => typeof(List<>),
-            var t when t == typeof(ISet<>) => typeof(HashSet<>),
-            var t when t == typeof(HashSet<>) => typeof(HashSet<>),
-            var t when t == typeof(SortedSet<>) => typeof(SortedSet<>),
-            _ => null
-        },
-        false => null,
-    };
 
     private static bool AddToGenericCollection<T>(ICollection<T> collection, T value)
     {

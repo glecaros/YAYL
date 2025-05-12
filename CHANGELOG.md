@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.6.1] - 2025-05-12
+- **YamlPathFieldAttribute**: Attribute now properly works with collections.
+
 ## [1.6.0] - 2025-05-11
 
 - **Adding YamlContext**: New configuration object that can be provided to parse operations.
