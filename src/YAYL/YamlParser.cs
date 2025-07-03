@@ -418,7 +418,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         throw new YamlParseException($"Unsupported YAML node type for target type {targetType.Name}");
     }
 
-    private async Task<string?> ResolveVariablesInStringAsync(string value, CancellationToken cancellationToken)
+    private async Task<string> ResolveVariablesInStringAsync(string value, CancellationToken cancellationToken)
     {
         foreach (var (expression, resolver) in _variableResolvers)
         {
@@ -436,16 +436,12 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 
     private async Task<object?> ConvertScalarToObjectAsync(YamlScalarNode node, CancellationToken cancellationToken)
     {
-        var value = node.Value switch
-        {
-            string v => await ResolveVariablesInStringAsync(v, cancellationToken).ConfigureAwait(false),
-            _ => node.Value,
-        };
-
-        if (value == null || value == "~")
+        if (node.Value is not string value || value == "~")
         {
             return null;
         }
+
+        value = await ResolveVariablesInStringAsync(value, cancellationToken).ConfigureAwait(false);
 
         if (string.IsNullOrEmpty(value))
         {
@@ -472,7 +468,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             return doubleValue;
         }
 
-        if (DateTime.TryParse(value, out var dateTimeValue))
+        if (DateTimeOffset.TryParse(value, out var dateTimeValue))
         {
             return dateTimeValue;
         }

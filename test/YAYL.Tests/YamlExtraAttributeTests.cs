@@ -1,46 +1,28 @@
-using System.Collections.Generic;
-using Xunit;
 using YAYL.Attributes;
 
 namespace YAYL.Tests;
 
 public class YamlExtraAttributeTests
 {
-    public class PersonWithExtras
+    public record PersonWithExtras(string Name, int Age)
     {
-        public string Name { get; set; } = string.Empty;
-        public int Age { get; set; }
-
         [YamlExtra]
-        public Dictionary<string, object> AdditionalProperties { get; set; } = new();
+        public Dictionary<string, object> AdditionalProperties { get; set; } = [];
     }
 
-    public class PersonWithExtrasConstructor
-    {
-        public PersonWithExtrasConstructor(string name, int age)
-        {
-            Name = name;
-            Age = age;
-            AdditionalProperties = new();
-        }
-
-        public string Name { get; }
-        public int Age { get; }
-
-        [YamlExtra]
-        public Dictionary<string, object> AdditionalProperties { get; set; }
-    }
+    public record PersonWithExtrasConstructor(
+        string Name,
+        int Age,
+        [property: YamlExtra] Dictionary<string, object> AdditionalProperties);
 
     [Fact]
     public void Parse_WithExtraProperties_StoresUnmatchedInExtraProperty()
     {
-        var yaml = @"
-name: John Doe
-age: 30
-height: 180cm
-weight: 75kg
-hobby: reading
-";
+        var yaml = "name: John Doe\n" +
+                   "age: 30\n" +
+                   "height: 180cm\n" +
+                   "weight: 75kg\n" +
+                   "hobby: reading\n";
 
         var parser = new YamlParser();
         var result = parser.Parse<PersonWithExtras>(yaml);
@@ -58,13 +40,11 @@ hobby: reading
     [Fact]
     public void Parse_WithExtraPropertiesAndConstructor_StoresUnmatchedInExtraProperty()
     {
-        var yaml = @"
-name: Jane Smith
-age: 25
-city: New York
-country: USA
-occupation: Engineer
-";
+        var yaml = "name: Jane Smith\n" +
+                   "age: 25\n" +
+                   "city: New York\n" +
+                   "country: USA\n" +
+                   "occupation: Engineer\n";
 
         var parser = new YamlParser();
         var result = parser.Parse<PersonWithExtrasConstructor>(yaml);
@@ -82,22 +62,20 @@ occupation: Engineer
     [Fact]
     public void Parse_WithComplexExtraProperties_HandlesNestedObjects()
     {
-        var yaml = @"
-name: Bob Wilson
-age: 35
-address:
-  street: 123 Main St
-  city: Springfield
-  postal-code: 12345
-skills:
-  - C#
-  - YAML
-  - Testing
-metadata:
-  created: 2023-01-01
-  active: true
-  score: 95.5
-";
+        var yaml = "name: Bob Wilson\n" +
+                   "age: 35\n" +
+                   "address:\n" +
+                   "  street: 123 Main St\n" +
+                   "  city: Springfield\n" +
+                   "  postal-code: 12345\n" +
+                   "skills:\n" +
+                   "  - C#\n" +
+                   "  - YAML\n" +
+                   "  - Testing\n" +
+                   "metadata:\n" +
+                   "  created: 2023-01-01\n" +
+                   "  active: true\n" +
+                   "  score: 95.5\n";
 
         var parser = new YamlParser();
         var result = parser.Parse<PersonWithExtras>(yaml);
@@ -108,15 +86,13 @@ metadata:
         Assert.NotNull(result.AdditionalProperties);
         Assert.Equal(3, result.AdditionalProperties.Count);
 
-        // Check nested dictionary (address)
         Assert.True(result.AdditionalProperties.ContainsKey("address"));
         var address = result.AdditionalProperties["address"] as Dictionary<string, object?>;
         Assert.NotNull(address);
         Assert.Equal("123 Main St", address["street"]);
         Assert.Equal("Springfield", address["city"]);
-        Assert.Equal(12345, address["postal-code"]); // YAML parses numeric postal codes as integers
+        Assert.Equal(12345, address["postal-code"]);
 
-        // Check array (skills)
         Assert.True(result.AdditionalProperties.ContainsKey("skills"));
         var skills = result.AdditionalProperties["skills"] as List<object?>;
         Assert.NotNull(skills);
@@ -125,7 +101,6 @@ metadata:
         Assert.Equal("YAML", skills[1]);
         Assert.Equal("Testing", skills[2]);
 
-        // Check metadata with various types
         Assert.True(result.AdditionalProperties.ContainsKey("metadata"));
         var metadata = result.AdditionalProperties["metadata"] as Dictionary<string, object?>;
         Assert.NotNull(metadata);
@@ -138,10 +113,8 @@ metadata:
     [Fact]
     public void Parse_OnlyKnownProperties_ExtraPropertyIsEmpty()
     {
-        var yaml = @"
-name: Alice Brown
-age: 28
-";
+        var yaml = "name: Alice Brown\n" +
+                   "age: 28\n";
 
         var parser = new YamlParser();
         var result = parser.Parse<PersonWithExtras>(yaml);
@@ -164,10 +137,8 @@ age: 28
     [Fact]
     public void Parse_InvalidExtraPropertyType_ThrowsException()
     {
-        var yaml = @"
-name: Test
-extra: value
-";
+        var yaml = "name: Test\n" +
+                   "extra: value\n";
 
         var parser = new YamlParser();
 
@@ -189,10 +160,8 @@ extra: value
     [Fact]
     public void Parse_MultipleExtraProperties_ThrowsException()
     {
-        var yaml = @"
-name: Test
-extra: value
-";
+        var yaml = "name: Test\n" +
+                   "extra: value\n";
 
         var parser = new YamlParser();
 
