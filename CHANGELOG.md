@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.7.0] - Unreleased
+
+- **YamlExtraAttribute:** Adding attribute that allows storing unhandled fields to be stored in a `Dictionary<string, object>`.
+
 ## [1.6.1] - 2025-05-12
 - **YamlPathFieldAttribute**: Attribute now properly works with collections.
 
