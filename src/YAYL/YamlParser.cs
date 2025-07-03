@@ -124,18 +124,15 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             }
         }
 
-        // Collect extra properties that weren't matched to any class property
         if (extraProperty != null)
         {
-            foreach (var kvp in mappingNode.Children)
+            foreach (var (key, value) in mappingNode.Children)
             {
-                if (kvp.Key is YamlScalarNode keyNode && keyNode.Value != null)
+                if (key is YamlScalarNode { Value: string yamlKey } && value != null)
                 {
-                    var yamlKey = keyNode.Value;
                     if (!processedYamlProperties.Contains(yamlKey))
                     {
-                        // Convert the value to object
-                        var extraValue = await ConvertYamlNodeAsync(kvp.Value, typeof(object), context, cancellationToken).ConfigureAwait(false);
+                        var extraValue = await ConvertYamlNodeAsync(value, typeof(object), context, cancellationToken).ConfigureAwait(false);
                         extraValues[yamlKey] = extraValue!;
                     }
                 }
@@ -204,48 +201,26 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
                 throw new YamlParseException($"Parameter name is null for constructor of type {type.Name}");
             }
 
-            // Check if the parameter corresponds to a property with YamlExtraAttribute
-            var correspondingProperty = type.GetProperty(parameter.Name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-            if (correspondingProperty != null && Attribute.IsDefined(correspondingProperty, typeof(YamlExtraAttribute)))
+            var matchingProperty = propertyValues.Keys
+                .FirstOrDefault(key => string.Equals(key, parameter.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (matchingProperty != null)
             {
-                // YamlExtraAttribute properties should not be used as constructor parameters
-                if (parameter.HasDefaultValue && parameter.DefaultValue is object defaultValue)
-                {
-                    args[i] = defaultValue;
-                }
-                else if (Nullable.GetUnderlyingType(parameter.ParameterType) != null)
-                {
-                    args[i] = null;
-                }
-                else
-                {
-                    args[i] = Activator.CreateInstance(parameter.ParameterType);
-                }
+                var value = propertyValues[matchingProperty];
+                propertyValues.Remove(matchingProperty);
+                args[i] = value.Value;
+            }
+            else if (parameter.HasDefaultValue && parameter.DefaultValue is object defaultValue)
+            {
+                args[i] = defaultValue;
+            }
+            else if (Nullable.GetUnderlyingType(parameter.ParameterType) != null)
+            {
+                args[i] = null;
             }
             else
             {
-                // Try to find matching property by parameter name (case-insensitive)
-                var matchingProperty = propertyValues.Keys
-                    .FirstOrDefault(key => string.Equals(key, parameter.Name, StringComparison.OrdinalIgnoreCase));
-
-                if (matchingProperty != null)
-                {
-                    var value = propertyValues[matchingProperty];
-                    propertyValues.Remove(matchingProperty);
-                    args[i] = value.Value;
-                }
-                else if (parameter.HasDefaultValue && parameter.DefaultValue is object defaultValue)
-                {
-                    args[i] = defaultValue;
-                }
-                else if (Nullable.GetUnderlyingType(parameter.ParameterType) != null)
-                {
-                    args[i] = null;
-                }
-                else
-                {
-                    missingRequired.Add(parameter.Name);
-                }
+                missingRequired.Add(parameter.Name);
             }
         }
 
@@ -389,7 +364,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 
     private async Task<object?> ConvertYamlNodeAsync(YamlNode node, Type targetType, YamlContext context, CancellationToken cancellationToken)
     {
-        // Special handling for object type - infer the best .NET type from the YAML node
+        // TODO: Add attributes to constrain object variant.
         if (targetType == typeof(object))
         {
             return node switch
@@ -477,7 +452,6 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             return string.Empty;
         }
 
-        // Try to infer the best type for the scalar value
         if (bool.TryParse(value, out var boolValue))
         {
             return boolValue;
@@ -508,7 +482,6 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             return guidValue;
         }
 
-        // Default to string
         return value;
     }
 
@@ -526,12 +499,11 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
     private async Task<object> ConvertMappingToObjectAsync(YamlMappingNode node, YamlContext context, CancellationToken cancellationToken)
     {
         var dictionary = new Dictionary<string, object?>();
-        foreach (var kvp in node.Children)
+        foreach (var (key, value) in node.Children)
         {
-            if (kvp.Key is YamlScalarNode keyNode && keyNode.Value != null)
+            if (key is YamlScalarNode { Value: string keyValue })
             {
-                var value = await ConvertYamlNodeAsync(kvp.Value, typeof(object), context, cancellationToken).ConfigureAwait(false);
-                dictionary[keyNode.Value] = value;
+                dictionary[keyValue] = await ConvertYamlNodeAsync(value, typeof(object), context, cancellationToken).ConfigureAwait(false);
             }
         }
         return dictionary;
