@@ -40,7 +40,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 
         if (discriminatorNode.Value is not YamlScalarNode typeNode)
         {
-            if (baseType.GetCustomAttribute<YamlDerivedTypeDefaultAttribute>() is {DerivedType: var defaultDerivedType})
+            if (baseType.GetCustomAttribute<YamlDerivedTypeDefaultAttribute>() is { DerivedType: var defaultDerivedType })
             {
                 if (defaultDerivedType.IsAbstract)
                 {
@@ -151,10 +151,10 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             switch (attribute)
             {
                 case YamlPathFieldAttribute pathFieldAttribute:
-                {
-                    processedValue = pathFieldAttribute.Process(processedValue, property.PropertyType, context);
-                    break;
-                }
+                    {
+                        processedValue = pathFieldAttribute.Process(processedValue, property.PropertyType, context);
+                        break;
+                    }
 
             }
         }
@@ -362,7 +362,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return await ParseNodeWithDefaultConstructorAsync<T>(node, baseType, context, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<object?> ConvertYamlNodeAsync(YamlNode node, Type targetType, YamlContext context, CancellationToken cancellationToken)
+    private async Task<object?> ConvertYamlNodeAsync(YamlNode node, Type targetType, YamlContext? context, CancellationToken cancellationToken)
     {
         // TODO: Add attributes to constrain object variant.
         if (targetType == typeof(object))
@@ -481,7 +481,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return value;
     }
 
-    private async Task<object> ConvertSequenceToObjectAsync(YamlSequenceNode node, YamlContext context, CancellationToken cancellationToken)
+    private async Task<object> ConvertSequenceToObjectAsync(YamlSequenceNode node, YamlContext? context, CancellationToken cancellationToken)
     {
         var list = new List<object?>();
         foreach (var child in node.Children)
@@ -492,7 +492,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return list;
     }
 
-    private async Task<object> ConvertMappingToObjectAsync(YamlMappingNode node, YamlContext context, CancellationToken cancellationToken)
+    private async Task<object> ConvertMappingToObjectAsync(YamlMappingNode node, YamlContext? context, CancellationToken cancellationToken)
     {
         var dictionary = new Dictionary<string, object?>();
         foreach (var (key, value) in node.Children)
@@ -565,7 +565,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         }
     }
 
-    private async Task<object> ConvertToArrayAsync(YamlSequenceNode node, Type targetType, YamlContext context, CancellationToken cancellationToken)
+    private async Task<object> ConvertToArrayAsync(YamlSequenceNode node, Type targetType, YamlContext? context, CancellationToken cancellationToken)
     {
         if (!targetType.IsArray)
         {
@@ -591,7 +591,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return array;
     }
 
-    private async Task<object> ConvertSequenceNodeAsync(YamlSequenceNode node, Type targetType, YamlContext context, CancellationToken cancellationToken)
+    private async Task<object> ConvertSequenceNodeAsync(YamlSequenceNode node, Type targetType, YamlContext? context, CancellationToken cancellationToken)
     {
         if (targetType.IsArray)
         {
@@ -612,7 +612,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return true;
     }
 
-    private async Task<object> ConvertToGenericCollectionAsync(YamlSequenceNode node, Type genericCollectionType, Type targetType, YamlContext context, CancellationToken cancellationToken)
+    private async Task<object> ConvertToGenericCollectionAsync(YamlSequenceNode node, Type genericCollectionType, Type targetType, YamlContext? context, CancellationToken cancellationToken)
     {
         var elementType = targetType.GetGenericArguments()[0];
         var collectionType = genericCollectionType.MakeGenericType(elementType);
@@ -630,7 +630,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return collection;
     }
 
-    private async Task<object> ConvertToDictionaryAsync(YamlMappingNode node, Type type, YamlContext context, CancellationToken cancellationToken)
+    private async Task<object> ConvertToDictionaryAsync(YamlMappingNode node, Type type, YamlContext? context, CancellationToken cancellationToken)
     {
         var dict = Activator.CreateInstance(type)!;
         var valueType = type.GenericTypeArguments[1];
