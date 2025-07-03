@@ -25,9 +25,9 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 
     public void AddVariableResolver(Regex expression, Func<string, string> resolver) => AddVariableResolver(expression, (v, _) => Task.FromResult(resolver(v)));
 
-    private string? NormalizeEnumValueName(string? value) => value?.Replace("-", "").Replace("_", "").ToLowerInvariant();
+    private static string? NormalizeEnumValueName(string? value) => value?.Replace("-", "").Replace("_", "").ToLowerInvariant();
 
-    private Type? GetPolymorphicType(YamlMappingNode node, Type baseType)
+    private static Type? GetPolymorphicType(YamlMappingNode node, Type baseType)
     {
         var polymorphicAttribute = baseType.GetCustomAttribute<YamlPolymorphicAttribute>();
         if (polymorphicAttribute == null)
@@ -68,11 +68,31 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return derivedType;
     }
 
+    private static PropertyInfo? FindExtraFieldsProperty(PropertyInfo[] properties)
+    {
+        var foundProperties = properties.Where(p => Attribute.IsDefined(p, typeof(YamlExtraAttribute)));
+        return foundProperties.Count() switch
+        {
+            0 => null,
+            1 => foundProperties.Single() switch
+            {
+                var p when p.PropertyType == typeof(Dictionary<string, object>) || p.PropertyType == typeof(Dictionary<string, object?>) => p,
+                _ => throw new YamlParseException($"Property '{foundProperties.Single().Name}' decorated with YamlExtra attribute must be of type Dictionary<string, object> or Dictionary<string, object?>"),
+            },
+            _ => throw new YamlParseException($"Only one property can be decorated with YamlExtraAttribute in type {properties[0].DeclaringType?.Name}"),
+        };
+    }
+
     private async Task<Dictionary<string, (PropertyInfo PropertyInfo, object? Value)>> GetPropertyValuesAsync(Type type, YamlMappingNode mappingNode, YamlContext? context, CancellationToken cancellationToken)
     {
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
+        PropertyInfo? extraProperty = FindExtraFieldsProperty(properties);
+
         Dictionary<string, (PropertyInfo PropertyInfo, object? Value)> propertyValues = [];
+        HashSet<string> processedYamlProperties = [];
+        Dictionary<string, object> extraValues = [];
+
         foreach (var property in properties)
         {
             var yamlPropertyName = _namingPolicy.GetPropertyName(property);
@@ -83,12 +103,16 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             {
                 propertyValues[property.Name] = (property, null);
             }
+            else if (Attribute.IsDefined(property, typeof(YamlExtraAttribute)))
+            {
+                propertyValues[property.Name] = (property, extraValues);
+            }
             else if (propertyNode.Value != null)
             {
                 var value = await ConvertYamlNodeAsync(propertyNode.Value, property.PropertyType, context, cancellationToken)
                     .ConfigureAwait(false);
-
                 propertyValues[property.Name] = (property, PostProcess(property, value, context));
+                processedYamlProperties.Add(yamlPropertyName);
             }
             else if ((Nullable.GetUnderlyingType(property.PropertyType) != null) || property.IsNullableReferenceType())
             {
@@ -99,6 +123,25 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
                 throw new YamlParseException($"Non-nullable property '{yamlPropertyName}' is missing");
             }
         }
+
+        // Collect extra properties that weren't matched to any class property
+        if (extraProperty != null)
+        {
+            foreach (var kvp in mappingNode.Children)
+            {
+                if (kvp.Key is YamlScalarNode keyNode && keyNode.Value != null)
+                {
+                    var yamlKey = keyNode.Value;
+                    if (!processedYamlProperties.Contains(yamlKey))
+                    {
+                        // Convert the value to object
+                        var extraValue = await ConvertYamlNodeAsync(kvp.Value, typeof(object), context, cancellationToken).ConfigureAwait(false);
+                        extraValues[yamlKey] = extraValue!;
+                    }
+                }
+            }
+        }
+
         return propertyValues;
     }
 
@@ -160,23 +203,49 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             {
                 throw new YamlParseException($"Parameter name is null for constructor of type {type.Name}");
             }
-            if (propertyValues.ContainsKey(parameter.Name))
+
+            // Check if the parameter corresponds to a property with YamlExtraAttribute
+            var correspondingProperty = type.GetProperty(parameter.Name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (correspondingProperty != null && Attribute.IsDefined(correspondingProperty, typeof(YamlExtraAttribute)))
             {
-                var value = propertyValues.GetValueOrDefault(parameter.Name);
-                propertyValues.Remove(parameter.Name);
-                args[i] = value.Value;
-            }
-            else if (parameter.HasDefaultValue && parameter.DefaultValue is object defaultValue)
-            {
-                args[i] = defaultValue;
-            }
-            else if (Nullable.GetUnderlyingType(parameter.ParameterType) != null)
-            {
-                args[i] = null;
+                // YamlExtraAttribute properties should not be used as constructor parameters
+                if (parameter.HasDefaultValue && parameter.DefaultValue is object defaultValue)
+                {
+                    args[i] = defaultValue;
+                }
+                else if (Nullable.GetUnderlyingType(parameter.ParameterType) != null)
+                {
+                    args[i] = null;
+                }
+                else
+                {
+                    args[i] = Activator.CreateInstance(parameter.ParameterType);
+                }
             }
             else
             {
-                missingRequired.Add(parameter.Name);
+                // Try to find matching property by parameter name (case-insensitive)
+                var matchingProperty = propertyValues.Keys
+                    .FirstOrDefault(key => string.Equals(key, parameter.Name, StringComparison.OrdinalIgnoreCase));
+
+                if (matchingProperty != null)
+                {
+                    var value = propertyValues[matchingProperty];
+                    propertyValues.Remove(matchingProperty);
+                    args[i] = value.Value;
+                }
+                else if (parameter.HasDefaultValue && parameter.DefaultValue is object defaultValue)
+                {
+                    args[i] = defaultValue;
+                }
+                else if (Nullable.GetUnderlyingType(parameter.ParameterType) != null)
+                {
+                    args[i] = null;
+                }
+                else
+                {
+                    missingRequired.Add(parameter.Name);
+                }
             }
         }
 
@@ -318,8 +387,20 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return await ParseNodeWithDefaultConstructorAsync<T>(node, baseType, context, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<object?> ConvertYamlNodeAsync(YamlNode node, Type targetType, YamlContext? context, CancellationToken cancellationToken)
+    private async Task<object?> ConvertYamlNodeAsync(YamlNode node, Type targetType, YamlContext context, CancellationToken cancellationToken)
     {
+        // Special handling for object type - infer the best .NET type from the YAML node
+        if (targetType == typeof(object))
+        {
+            return node switch
+            {
+                YamlScalarNode scalarNode => await ConvertScalarToObjectAsync(scalarNode, cancellationToken).ConfigureAwait(false),
+                YamlSequenceNode sequenceNode => await ConvertSequenceToObjectAsync(sequenceNode, context, cancellationToken).ConfigureAwait(false),
+                YamlMappingNode mappingNode => await ConvertMappingToObjectAsync(mappingNode, context, cancellationToken).ConfigureAwait(false),
+                _ => throw new YamlParseException($"Unsupported YAML node type: {node.GetType().Name}")
+            };
+        }
+
         switch (node)
         {
             case YamlScalarNode scalarNode:
@@ -376,6 +457,84 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         }
 
         return value;
+    }
+
+    private async Task<object?> ConvertScalarToObjectAsync(YamlScalarNode node, CancellationToken cancellationToken)
+    {
+        var value = node.Value switch
+        {
+            string v => await ResolveVariablesInStringAsync(v, cancellationToken).ConfigureAwait(false),
+            _ => node.Value,
+        };
+
+        if (value == null || value == "~")
+        {
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        // Try to infer the best type for the scalar value
+        if (bool.TryParse(value, out var boolValue))
+        {
+            return boolValue;
+        }
+
+        if (int.TryParse(value, out var intValue))
+        {
+            return intValue;
+        }
+
+        if (long.TryParse(value, out var longValue))
+        {
+            return longValue;
+        }
+
+        if (double.TryParse(value, out var doubleValue))
+        {
+            return doubleValue;
+        }
+
+        if (DateTime.TryParse(value, out var dateTimeValue))
+        {
+            return dateTimeValue;
+        }
+
+        if (Guid.TryParse(value, out var guidValue))
+        {
+            return guidValue;
+        }
+
+        // Default to string
+        return value;
+    }
+
+    private async Task<object> ConvertSequenceToObjectAsync(YamlSequenceNode node, YamlContext context, CancellationToken cancellationToken)
+    {
+        var list = new List<object?>();
+        foreach (var child in node.Children)
+        {
+            var value = await ConvertYamlNodeAsync(child, typeof(object), context, cancellationToken).ConfigureAwait(false);
+            list.Add(value);
+        }
+        return list;
+    }
+
+    private async Task<object> ConvertMappingToObjectAsync(YamlMappingNode node, YamlContext context, CancellationToken cancellationToken)
+    {
+        var dictionary = new Dictionary<string, object?>();
+        foreach (var kvp in node.Children)
+        {
+            if (kvp.Key is YamlScalarNode keyNode && keyNode.Value != null)
+            {
+                var value = await ConvertYamlNodeAsync(kvp.Value, typeof(object), context, cancellationToken).ConfigureAwait(false);
+                dictionary[keyNode.Value] = value;
+            }
+        }
+        return dictionary;
     }
 
     private async Task<object?> ConvertScalarNodeAsync(YamlScalarNode node, Type targetType, CancellationToken cancellationToken)
@@ -438,7 +597,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         }
     }
 
-    private async Task<object> ConvertToArrayAsync(YamlSequenceNode node, Type targetType, YamlContext? context, CancellationToken cancellationToken)
+    private async Task<object> ConvertToArrayAsync(YamlSequenceNode node, Type targetType, YamlContext context, CancellationToken cancellationToken)
     {
         if (!targetType.IsArray)
         {
@@ -464,7 +623,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return array;
     }
 
-    private async Task<object> ConvertSequenceNodeAsync(YamlSequenceNode node, Type targetType, YamlContext? context, CancellationToken cancellationToken)
+    private async Task<object> ConvertSequenceNodeAsync(YamlSequenceNode node, Type targetType, YamlContext context, CancellationToken cancellationToken)
     {
         if (targetType.IsArray)
         {
@@ -485,7 +644,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return true;
     }
 
-    private async Task<object> ConvertToGenericCollectionAsync(YamlSequenceNode node, Type genericCollectionType, Type targetType, YamlContext? context, CancellationToken cancellationToken)
+    private async Task<object> ConvertToGenericCollectionAsync(YamlSequenceNode node, Type genericCollectionType, Type targetType, YamlContext context, CancellationToken cancellationToken)
     {
         var elementType = targetType.GetGenericArguments()[0];
         var collectionType = genericCollectionType.MakeGenericType(elementType);
@@ -503,7 +662,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return collection;
     }
 
-    private async Task<object> ConvertToDictionaryAsync(YamlMappingNode node, Type type, YamlContext? context, CancellationToken cancellationToken)
+    private async Task<object> ConvertToDictionaryAsync(YamlMappingNode node, Type type, YamlContext context, CancellationToken cancellationToken)
     {
         var dict = Activator.CreateInstance(type)!;
         var valueType = type.GenericTypeArguments[1];
