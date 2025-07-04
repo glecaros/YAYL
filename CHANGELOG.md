@@ -1,8 +1,9 @@
 # Changelog
 
-## [1.7.0] - Unreleased
+## [1.7.0] - 2025-07-04
 
 - **YamlExtraAttribute:** Adding attribute that allows storing unhandled fields to be stored in a `Dictionary<string, object>`.
+- **YamlVariantAttribute:** Adding attribute to allow parsing `object` based variants, this also includes the `YamlVariantTypeObjectAttribute` and `YamlVariantTypeScalarAttribute`.
 
 ## [1.6.1] - 2025-05-12
 - **YamlPathFieldAttribute**: Attribute now properly works with collections.

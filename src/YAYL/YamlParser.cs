@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -12,6 +13,50 @@ using YAYL.Attributes;
 using YAYL.Reflection;
 
 namespace YAYL;
+
+class PropertyProxy: PropertyInfo
+{
+    private readonly PropertyInfo _propertyInfo;
+    private readonly Type _type;
+
+    public PropertyProxy(PropertyInfo propertyInfo, Type type)
+    {
+        _propertyInfo = propertyInfo;
+        _type = type;
+    }
+
+    public override PropertyAttributes Attributes => _propertyInfo.Attributes;
+
+    public override bool CanRead => throw new NotImplementedException();
+
+    public override bool CanWrite => throw new NotImplementedException();
+
+    public override Type PropertyType => _type;
+
+    public override Type? DeclaringType => _propertyInfo.DeclaringType;
+
+    public override string Name => _propertyInfo.Name;
+
+    public override Type? ReflectedType => throw new NotImplementedException();
+
+    public override MethodInfo[] GetAccessors(bool nonPublic) => throw new NotImplementedException();
+
+    public override object[] GetCustomAttributes(bool inherit) => _propertyInfo.GetCustomAttributes(inherit);
+
+    public override object[] GetCustomAttributes(Type attributeType, bool inherit) => _propertyInfo.GetCustomAttributes(attributeType, inherit);
+
+    public override MethodInfo? GetGetMethod(bool nonPublic) => _propertyInfo.GetGetMethod(nonPublic);
+
+    public override ParameterInfo[] GetIndexParameters() => _propertyInfo.GetIndexParameters();
+
+    public override MethodInfo? GetSetMethod(bool nonPublic) => throw new NotImplementedException();
+
+    public override object? GetValue(object? obj, BindingFlags invokeAttr, Binder? binder, object?[]? index, CultureInfo? culture) => throw new NotImplementedException();
+
+    public override bool IsDefined(Type attributeType, bool inherit) => throw new NotImplementedException();
+
+    public override void SetValue(object? obj, object? value, BindingFlags invokeAttr, Binder? binder, object?[]? index, CultureInfo? culture)  =>throw new NotImplementedException();
+}
 
 public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCaseLower)
 {
@@ -83,6 +128,111 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         };
     }
 
+    private async Task<object?> GetVariantValueFromScalarAsync(PropertyInfo property, YamlScalarNode scalarNode, CancellationToken cancellationToken)
+    {
+        var allowedTypes = Attribute.GetCustomAttributes(property)
+                                    .OfType<YamlVariantTypeScalarAttribute>()
+                                    .Select(attr => attr.Type)
+                                    .ToHashSet();
+        return await ConvertScalarToObjectAsync(scalarNode, allowedTypes, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<object?> GetVariantValueFromMappingAsync(PropertyInfo property, YamlMappingNode mappingNode, YamlContext? context, CancellationToken cancellationToken)
+    {
+        if (property.PropertyType.IsDictionary())
+        {
+            var dict = Activator.CreateInstance(property.PropertyType)!;
+            var valueType = property.PropertyType.GenericTypeArguments[1];
+            if (valueType != typeof(object))
+            {
+                throw new YamlParseException($"For variant dictionaries, the value type must be 'object', but was '{valueType.Name}'.");
+            }
+            foreach (var (node, valueNode) in mappingNode.Children)
+            {
+                if (node is YamlScalarNode keyNode)
+                {
+                    PropertyProxy propertyProxy = new(
+                        property,
+                        valueType
+                    );
+                    var value = await GetVariantPropertyValueAsync(propertyProxy, valueNode, context, cancellationToken).ConfigureAwait(false);
+                    property.PropertyType.InvokeMember("Add", BindingFlags.InvokeMethod, null, dict, [keyNode!.Value, value]);
+                }
+                else
+                {
+                    throw new YamlParseException("Dictionary keys must be scalar values");
+                }
+            }
+
+            return dict;
+        }
+        foreach (var (type, fieldToTest) in Attribute.GetCustomAttributes(property).OfType<YamlVariantTypeObjectAttribute>())
+        {
+            if (mappingNode.Children.ContainsKey(new YamlScalarNode(fieldToTest)))
+            {
+                return await ConvertYamlNodeAsync(mappingNode, type, context, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        throw new YamlParseException($"Mapping node for property '{property.Name}' does not contain any of the known variant types.");
+    }
+
+    private async Task<object?> GetVariantValueFromSequenceAsync(PropertyInfo property, YamlSequenceNode sequenceNode, YamlContext? context, CancellationToken cancellationToken)
+    {
+        if (property.PropertyType.IsArray)
+        {
+            var elementType = property.PropertyType.GetElementType()!;
+            if (elementType != typeof(object))
+            {
+                throw new YamlParseException($"For variant arrays, the element type must be 'object', but was '{elementType.Name}'.");
+            }
+            var array = Array.CreateInstance(elementType, sequenceNode.Children.Count);
+            foreach (var (childNode, i) in sequenceNode.Children.Select((n, i) => (n, i)))
+            {
+                array.SetValue(await GetVariantPropertyValueAsync(property, childNode, context, cancellationToken).ConfigureAwait(false), i);
+            }
+            return array;
+        }
+        else if (property.PropertyType.GetGenericCollection() is Type genericType)
+        {
+            var elementType = property.PropertyType.GetGenericArguments()[0];
+            if (elementType != typeof(object))
+            {
+                throw new YamlParseException($"For variant collections, the element type must be 'object', but was '{elementType.Name}'.");
+            }
+            var collectionType = genericType.MakeGenericType(typeof(object));
+            var collection = Activator.CreateInstance(collectionType)!;
+            foreach (var child in sequenceNode.Children)
+            {
+                var value = await GetVariantPropertyValueAsync(property, child, context, cancellationToken).ConfigureAwait(false);
+                this.CallGenericMethod<bool>(
+                    methodName: nameof(AddToGenericCollection),
+                    flags: BindingFlags.NonPublic | BindingFlags.Static,
+                    typeArguments: [typeof(object)],
+                    parameters: [collection, value]
+                );
+            }
+            return collection;
+        }
+        throw new YamlParseException($"Property '{property.Name}' is not a valid collection type for sequence node");
+    }
+
+    private async Task<object?> GetVariantPropertyValueAsync(PropertyInfo property, YamlNode node, YamlContext? context, CancellationToken cancellationToken)
+    {
+        var variantAttribute = property.GetCustomAttribute<YamlVariantAttribute>();
+        if (variantAttribute == null)
+        {
+            throw new YamlParseException($"Property '{property.Name}' is not decorated with YamlVariantAttribute");
+        }
+
+        return node switch
+        {
+            YamlScalarNode scalarNode => await GetVariantValueFromScalarAsync(property, scalarNode, cancellationToken).ConfigureAwait(false),
+            YamlMappingNode mappingNode => await GetVariantValueFromMappingAsync(property, mappingNode, context, cancellationToken).ConfigureAwait(false),
+            YamlSequenceNode sequenceNode => await GetVariantValueFromSequenceAsync(property, sequenceNode, context, cancellationToken).ConfigureAwait(false),
+            _ => throw new YamlParseException($"Unsupported YAML node type for variant property '{property.Name}'")
+        };
+    }
+
     private async Task<Dictionary<string, (PropertyInfo PropertyInfo, object? Value)>> GetPropertyValuesAsync(Type type, YamlMappingNode mappingNode, YamlContext? context, CancellationToken cancellationToken)
     {
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
@@ -106,6 +256,11 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             else if (Attribute.IsDefined(property, typeof(YamlExtraAttribute)))
             {
                 propertyValues[property.Name] = (property, extraValues);
+            }
+            else if (Attribute.IsDefined(property, typeof(YamlVariantAttribute)))
+            {
+                var value = await GetVariantPropertyValueAsync(property, propertyNode.Value, context, cancellationToken).ConfigureAwait(false);
+                propertyValues[property.Name] = (property, value);
             }
             else if (propertyNode.Value != null)
             {
@@ -364,12 +519,12 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 
     private async Task<object?> ConvertYamlNodeAsync(YamlNode node, Type targetType, YamlContext? context, CancellationToken cancellationToken)
     {
-        // TODO: Add attributes to constrain object variant.
+        // TODO: Add attributes to constrain object variants.
         if (targetType == typeof(object))
         {
             return node switch
             {
-                YamlScalarNode scalarNode => await ConvertScalarToObjectAsync(scalarNode, cancellationToken).ConfigureAwait(false),
+                YamlScalarNode scalarNode => await ConvertScalarToObjectAsync(scalarNode, null, cancellationToken).ConfigureAwait(false),
                 YamlSequenceNode sequenceNode => await ConvertSequenceToObjectAsync(sequenceNode, context, cancellationToken).ConfigureAwait(false),
                 YamlMappingNode mappingNode => await ConvertMappingToObjectAsync(mappingNode, context, cancellationToken).ConfigureAwait(false),
                 _ => throw new YamlParseException($"Unsupported YAML node type: {node.GetType().Name}")
@@ -434,7 +589,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         return value;
     }
 
-    private async Task<object?> ConvertScalarToObjectAsync(YamlScalarNode node, CancellationToken cancellationToken)
+    private async Task<object?> ConvertScalarToObjectAsync(YamlScalarNode node, HashSet<Type>? allowedTypes, CancellationToken cancellationToken)
     {
         if (node.Value is not string value || value == "~")
         {
@@ -448,37 +603,42 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             return string.Empty;
         }
 
-        if (bool.TryParse(value, out var boolValue))
+        if (bool.TryParse(value, out var boolValue) && (allowedTypes?.Contains(typeof(bool)) ?? true))
         {
             return boolValue;
         }
 
-        if (int.TryParse(value, out var intValue))
+        if (int.TryParse(value, out var intValue) && (allowedTypes?.Contains(typeof(int)) ?? true))
         {
             return intValue;
         }
 
-        if (long.TryParse(value, out var longValue))
+        if (long.TryParse(value, out var longValue) && (allowedTypes?.Contains(typeof(long)) ?? true))
         {
             return longValue;
         }
 
-        if (double.TryParse(value, out var doubleValue))
+        if (double.TryParse(value, out var doubleValue) && (allowedTypes?.Contains(typeof(double)) ?? true))
         {
             return doubleValue;
         }
 
-        if (DateTimeOffset.TryParse(value, out var dateTimeValue))
+        if (DateTimeOffset.TryParse(value, out var dateTimeValue) && (allowedTypes?.Contains(typeof(DateTimeOffset)) ?? true))
         {
             return dateTimeValue;
         }
 
-        if (Guid.TryParse(value, out var guidValue))
+        if (Guid.TryParse(value, out var guidValue) && (allowedTypes?.Contains(typeof(Guid)) ?? true))
         {
             return guidValue;
         }
 
-        return value;
+        if (allowedTypes?.Contains(typeof(string)) ?? true)
+        {
+            return value;
+        }
+
+        throw new YamlParseException($"Cannot convert scalar value '{value}' to any of the allowed types: {string.Join(", ", allowedTypes?.Select(t => t.Name) ?? [])}");
     }
 
     private async Task<object> ConvertSequenceToObjectAsync(YamlSequenceNode node, YamlContext? context, CancellationToken cancellationToken)
