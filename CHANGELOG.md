@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.7.1] - 2025-07-07
+
+- **Updated library to target .net 8:** Updated to point to latest LTS version.
+
 ## [1.7.0] - 2025-07-04
 
 - **YamlExtraAttribute:** Adding attribute that allows storing unhandled fields to be stored in a `Dictionary<string, object>`.
