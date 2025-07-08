@@ -252,15 +252,18 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             if (Attribute.IsDefined(property, typeof(YamlIgnoreAttribute)))
             {
                 propertyValues[property.Name] = (property, null);
+                processedYamlProperties.Add(yamlPropertyName);
             }
             else if (Attribute.IsDefined(property, typeof(YamlExtraAttribute)))
             {
                 propertyValues[property.Name] = (property, extraValues);
+                processedYamlProperties.Add(yamlPropertyName);
             }
             else if (Attribute.IsDefined(property, typeof(YamlVariantAttribute)))
             {
                 var value = await GetVariantPropertyValueAsync(property, propertyNode.Value, context, cancellationToken).ConfigureAwait(false);
                 propertyValues[property.Name] = (property, value);
+                processedYamlProperties.Add(yamlPropertyName);
             }
             else if (propertyNode.Value != null)
             {
@@ -272,6 +275,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             else if ((Nullable.GetUnderlyingType(property.PropertyType) != null) || property.IsNullableReferenceType())
             {
                 propertyValues[property.Name] = (property, null);
+                processedYamlProperties.Add(yamlPropertyName);
             }
             else
             {
