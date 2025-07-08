@@ -96,7 +96,8 @@ public class YamlVariantAttributeTests
     [Fact]
     public void Parse_WithConstructorParameter_ObjectVariant_ParsesAsBar()
     {
-        var yaml = "value:\n  baz: constructor bar";
+        var yaml = "value:\n" +
+                   "  baz: constructor bar";
 
         var parser = new YamlParser();
         var result = parser.Parse<FooWithConstructor>(yaml);
@@ -141,5 +142,94 @@ public class YamlVariantAttributeTests
 
         var exception = Assert.Throws<YamlParseException>(() => parser.Parse<FooWithProperties>(yaml));
         Assert.Contains("Mapping node for property 'Value' does not contain any of the known variant types.", exception.Message);
+    }
+
+    [YamlPolymorphic("type")]
+    [YamlDerivedType("circle", typeof(Circle))]
+    [YamlDerivedType("rectangle", typeof(Rectangle))]
+    public abstract record Shape(string Name);
+
+    public record Circle(string Name, double Radius) : Shape(Name);
+    public record Rectangle(string Name, double Width, double Height) : Shape(Name);
+
+    record Wrapper(
+        [property: YamlVariant]
+        [property: YamlVariantTypeScalar(typeof(string))]
+        [property: YamlVariantTypeScalar(typeof(int))]
+        [property: YamlVariantTypeObject(typeof(Shape), "type")]
+        [property: YamlVariantTypeObject(typeof(Other), "field")]
+        object? Value,
+
+        [property: YamlExtra]
+        Dictionary<string, object?>? ExtraProperties
+    );
+
+    [Fact]
+    public void Parse_MixedVariantPolymorphic_ScalarVariant()
+    {
+        var yaml = @"
+            value: hello world";
+
+        var parser = new YamlParser();
+        var result = parser.Parse<Wrapper>(yaml);
+
+        Assert.NotNull(result);
+        Assert.IsType<string>(result.Value);
+        Assert.Equal("hello world", result.Value);
+    }
+
+    [Fact]
+    public void Parse_MixedVariantPolymorphic_PolymorphicVariant()
+    {
+        var yaml = @"
+            value:
+              type: circle
+              name: My Circle
+              radius: 5.0";
+
+        var parser = new YamlParser();
+        var result = parser.Parse<Wrapper>(yaml);
+
+        Assert.NotNull(result);
+        Assert.IsType<Circle>(result.Value);
+        var circle = (Circle)result.Value!;
+        Assert.Equal("My Circle", circle.Name);
+        Assert.Equal(5.0, circle.Radius);
+
+    }
+
+    [Fact]
+    public void Parse_MixedVariantPolymorphic_OtherVariant()
+    {
+        var yaml = @"
+            value:
+              field: another value";
+
+        var parser = new YamlParser();
+        var result = parser.Parse<Wrapper>(yaml);
+
+        Assert.NotNull(result);
+        Assert.IsType<Other>(result.Value);
+        var other = (Other)result.Value!;
+        Assert.Equal("another value", other.Field);
+    }
+
+    [Fact]
+    public void Parse_VariantFieldShouldNotShowInExtraProperties()
+    {
+        var yaml = @"
+            value:
+              field: another value";
+
+        var parser = new YamlParser();
+        var result = parser.Parse<Wrapper>(yaml);
+
+        Assert.NotNull(result);
+        Assert.IsType<Other>(result.Value);
+        var other = (Other)result.Value!;
+        Assert.Equal("another value", other.Field);
+
+        Assert.NotNull(result.ExtraProperties);
+        Assert.Empty(result.ExtraProperties);
     }
 }
