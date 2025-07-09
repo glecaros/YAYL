@@ -168,4 +168,37 @@ public class YamlExtraAttributeTests
         var exception = Assert.Throws<YamlParseException>(() => parser.Parse<MultipleExtraProperties>(yaml));
         Assert.Contains("Only one property can be decorated with YamlExtraAttribute", exception.Message);
     }
+
+    [YamlPolymorphic("type")]
+    [YamlDerivedType("circle", typeof(Circle))]
+    [YamlDerivedType("rectangle", typeof(Rectangle))]
+    public abstract record Shape(string Name)
+    {
+        [YamlExtra]
+        public Dictionary<string, object>? Extra { get; set; }
+
+    }
+
+    public record Circle(string Name, double Radius) : Shape(Name);
+    public record Rectangle(string Name, double Width, double Height) : Shape(Name);
+
+    [Fact]
+    public void Parse_Polymorphic_DiscriminatorNotPresent()
+    {
+        var yaml = @"
+            type: circle
+            name: My Circle
+            radius: 3.0";
+
+        var parser = new YamlParser();
+
+        var result = parser.Parse<Shape>(yaml);
+        Assert.NotNull(result);
+        Assert.IsType<Circle>(result);
+        var circle = (Circle)result;
+        Assert.Equal("My Circle", circle.Name);
+        Assert.Equal(3.0, circle.Radius);
+        Assert.NotNull(circle.Extra);
+        Assert.Empty(circle.Extra);
+    }
 }

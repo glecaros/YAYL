@@ -243,6 +243,12 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
         HashSet<string> processedYamlProperties = [];
         Dictionary<string, object> extraValues = [];
 
+        /* If the type is polymorphic, add the discriminator property to the processed list, as it can be implicit */
+        if (type.GetCustomAttribute<YamlPolymorphicAttribute>() is { TypeDiscriminatorPropertyName: string discriminatorPropertyName })
+        {
+            processedYamlProperties.Add(discriminatorPropertyName);
+        }
+
         foreach (var property in properties)
         {
             var yamlPropertyName = _namingPolicy.GetPropertyName(property);

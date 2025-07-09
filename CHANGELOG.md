@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.7.3] - 2025-07-08
+
+- **Fixed**: Fixed issue that was causing the discriminator field in discriminated unions to show in the field marked with `[YamlExtra]`.
+
 ## [1.7.2] - 2025-07-08
 
 - **Fixed**: Fixed issue that was causing some mapped fields to show up in the field marked with `[YamlExtra]`.
