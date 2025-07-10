@@ -141,7 +141,7 @@ public class YamlVariantAttributeTests
         var parser = new YamlParser();
 
         var exception = Assert.Throws<YamlParseException>(() => parser.Parse<FooWithProperties>(yaml));
-        Assert.Contains("Mapping node for property 'Value' does not contain any of the known variant types.", exception.Message);
+        Assert.Contains("Mapping node for property 'Value' does not contain any of the known variant types", exception.Message);
     }
 
     [YamlPolymorphic("type")]
@@ -231,5 +231,35 @@ public class YamlVariantAttributeTests
 
         Assert.NotNull(result.ExtraProperties);
         Assert.Empty(result.ExtraProperties);
+    }
+
+    record VariantCatchAll(
+        [property: YamlExtra]
+        Dictionary<string, object?> ExtraProperties);
+
+    record WrapperWithDefault(
+        [property: YamlVariant]
+        [property: YamlVariantTypeScalar(typeof(string))]
+        [property: YamlVariantTypeScalar(typeof(int))]
+        [property: YamlVariantTypeObject(typeof(Shape), "type")]
+        [property: YamlVariantTypeObject(typeof(Other), "field")]
+        [property: YamlVariantTypeDefault(typeof(VariantCatchAll))]
+        object? Value
+    );
+
+    [Fact]
+    public void Parse_VariantWithDefaultType_CatchAll()
+    {
+        var yaml = @"
+            value:
+              extra: additional info";
+        var parser = new YamlParser();
+        var result = parser.Parse<WrapperWithDefault>(yaml);
+        Assert.NotNull(result);
+        Assert.IsType<VariantCatchAll>(result.Value);
+        var catchAll = (VariantCatchAll)result.Value!;
+        Assert.NotNull(catchAll.ExtraProperties);
+        Assert.Single(catchAll.ExtraProperties);
+        Assert.Equal("additional info", catchAll.ExtraProperties["extra"]);
     }
 }

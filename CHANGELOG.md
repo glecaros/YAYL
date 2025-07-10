@@ -1,12 +1,19 @@
 # Changelog
 
+## [1.8.0] - 2025-07-09
+
+- **YamlVariantTypeDefaultAttribute:** Added attribute that allows adding a catch all to variant declarations.
+- **Improved exception messages:** Added more information to exceptions to make errors easier to debug.
+- **Fixed**: Fixed issue with variants when the node is null or not present.
+
+
 ## [1.7.3] - 2025-07-08
 
-- **Fixed**: Fixed issue that was causing the discriminator field in discriminated unions to show in the field marked with `[YamlExtra]`.
+- **Fixed:**: Fixed issue that was causing the discriminator field in discriminated unions to show in the field marked with `[YamlExtra]`.
 
 ## [1.7.2] - 2025-07-08
 
-- **Fixed**: Fixed issue that was causing some mapped fields to show up in the field marked with `[YamlExtra]`.
+- **Fixed:**: Fixed issue that was causing some mapped fields to show up in the field marked with `[YamlExtra]`.
 
 ## [1.7.1] - 2025-07-07
 
