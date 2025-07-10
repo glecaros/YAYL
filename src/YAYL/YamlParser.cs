@@ -93,6 +93,11 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
                 }
                 return defaultDerivedType;
             }
+            /* If no discriminator is found, but the base type is one of the target types, return it */
+            if (baseType.GetCustomAttributes<YamlDerivedTypeAttribute>().Any(a => a.DerivedType == baseType))
+            {
+                return baseType;
+            }
             throw new YamlParseException($"Type discriminator '{polymorphicAttribute.TypeDiscriminatorPropertyName}' not found or invalid.", node);
         }
 
@@ -607,7 +612,8 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 
     private async Task<object?> ConvertScalarToObjectAsync(YamlScalarNode node, HashSet<Type>? allowedTypes, CancellationToken cancellationToken)
     {
-        if (node.Value is not string value || value == "~")
+        string[] validNullValues = ["~", "null", "NULL", "Null", "", " "];
+        if (node.Value is not string value || validNullValues.Contains(value))
         {
             return null;
         }

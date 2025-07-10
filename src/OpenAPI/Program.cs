@@ -5,7 +5,7 @@ using YAYL.Attributes;
 
 // const string path = "/workspaces/sorento_sdk/openai-in-typespec/external-specs/latest.yaml";
 // const string path = "/workspaces/sorento_sdk/tools/OpenApiToTsp/OpenApiTinyDOM/test.yaml";
-const string path = "/workspaces/YAYL/src/OpenAPI/test.yaml";
+const string path = "/workspaces/YAYL/src/OpenAPI/openapi.documented.yml";
 // const string path = "/workspaces/sorento_sdk/tools/OpenApiToTsp/OpenApiTinyDOM/openapi.documented.yml";
 
 YamlParser parser = new YamlParser(YamlNamingPolicy.CamelCase);
@@ -73,7 +73,12 @@ public enum ParameterLocation
 [YamlDerivedType("object", typeof(OpenAPISchemaObject))]
 [YamlDerivedType("array", typeof(OpenAPISchemaArray))]
 [YamlDerivedType("boolean", typeof(OpenAPISchemaBoolean))]
+[YamlDerivedType("null", typeof(OpenAPISchemaNull))]
 public record OpenAPISchema();
+
+public record OpenAPISchemaNull(
+    [property: YamlExtra] Dictionary<string, object?>? Extra
+) : OpenAPISchema;
 
 public record OpenAPISchemaInteger(
     int? Default,
@@ -89,11 +94,8 @@ public record OpenAPISchemaNumber(
 ) : OpenAPISchema;
 
 public record OpenAPISchemaString(
-    [property:
-        YamlVariant,
-        YamlVariantTypeScalar(typeof(string)),
-        YamlVariantTypeScalar(typeof(List<string>))]
-    string? Default,
+    /* TODO: Add support for string and List<string> as variant alternatives */
+    object? Default,
     List<string>? Enum,
     string? Description,
     bool? Nullable,
@@ -107,6 +109,9 @@ public record OpenAPISchemaString(
 public record OpenAPISchemaBoolean : OpenAPISchema;
 
 
+public record OpenAPIAdditionalPropertiesEmpty(
+    [property: YamlExtra] Dictionary<string, object>? Extra
+);
 
 public record OpenAPISchemaObject(
     [property:
@@ -115,7 +120,8 @@ public record OpenAPISchemaObject(
         YamlVariantTypeObject(typeof(OpenAPIRef), "$ref"),
         YamlVariantTypeObject(typeof(OpenAPIOneOf), "oneOf"),
         YamlVariantTypeObject(typeof(OpenAPIAnyOf), "anyOf"),
-        YamlVariantTypeObject(typeof(OpenAPIAllOf), "allOf")]
+        YamlVariantTypeObject(typeof(OpenAPIAllOf), "allOf"),
+        YamlVariantTypeObject(typeof(OpenAPISchemaArray), "items"),] // TODO: This seems to be a spec bug.
     Dictionary<string, object>? Properties,
     // [property: YamlPropertyName("required")] List<string>? Required
 
@@ -123,7 +129,9 @@ public record OpenAPISchemaObject(
         YamlVariant,
         YamlVariantTypeScalar(typeof(bool)),
         YamlVariantTypeObject(typeof(OpenAPISchema), "type"),
-        YamlVariantTypeObject(typeof(OpenAPIRef), "$ref")]
+        YamlVariantTypeObject(typeof(OpenAPIOneOf), "oneOf"),
+        YamlVariantTypeObject(typeof(OpenAPIRef), "$ref"),
+        YamlVariantTypeDefault(typeof(OpenAPIAdditionalPropertiesEmpty))]
     object? AdditionalProperties,
     List<string>? Required,
     bool? Nullable,
@@ -273,7 +281,8 @@ public record OpenAPIComponents(
         YamlVariantTypeObject(typeof(OpenAPISchema), "type"),
         YamlVariantTypeObject(typeof(OpenAPIOneOf), "oneOf"),
         YamlVariantTypeObject(typeof(OpenAPIAllOf), "allOf"),
-        YamlVariantTypeObject(typeof(OpenAPIAnyOf), "anyOf"),]
+        YamlVariantTypeObject(typeof(OpenAPIAnyOf), "anyOf"),
+        YamlVariantTypeObject(typeof(OpenAPISchemaObject), "properties"),] // TODO: This seems to be a spec bug.
     Dictionary<string, object>? Schemas,
     [property: YamlExtra] Dictionary<string, object?> Extra
 );
