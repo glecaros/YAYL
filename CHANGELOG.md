@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.8.0] - 2025-07-09
+## [1.8.0] - 2025-07-10
 
 - **YamlVariantTypeDefaultAttribute:** Added attribute that allows adding a catch all to variant declarations.
 - **Improved exception messages:** Added more information to exceptions to make errors easier to debug.
