@@ -4,6 +4,8 @@
 
 - **YamlVariantTypeDefaultAttribute:** Added attribute that allows adding a catch all to variant declarations.
 - **Improved exception messages:** Added more information to exceptions to make errors easier to debug.
+- **Parsing derived types:** Now is possible to parse a derived type directly even when the discriminator field is not present.
+- **Improved handling of null:** Improved handling of null values.
 - **Fixed**: Fixed issue with variants when the node is null or not present.
 
 
