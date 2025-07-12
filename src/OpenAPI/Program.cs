@@ -1,11 +1,12 @@
 ﻿using System.ComponentModel;
+using System.Numerics;
 using System.Reflection;
 using YAYL;
 using YAYL.Attributes;
 
 // const string path = "/workspaces/sorento_sdk/openai-in-typespec/external-specs/latest.yaml";
 // const string path = "/workspaces/sorento_sdk/tools/OpenApiToTsp/OpenApiTinyDOM/test.yaml";
-const string path = "/workspaces/YAYL/src/OpenAPI/openapi.documented.yml";
+const string path = "/workspaces/YAYL/src/OpenAPI/lala.yaml";
 // const string path = "/workspaces/sorento_sdk/tools/OpenApiToTsp/OpenApiTinyDOM/openapi.documented.yml";
 
 YamlParser parser = new YamlParser(YamlNamingPolicy.CamelCase);
@@ -65,6 +66,11 @@ public enum ParameterLocation
     Cookie
 }
 
+public record OpenAPISchemaDiscriminator(
+    string PropertyName,
+    [property: YamlExtra] Dictionary<string, object?>? Extra
+);
+
 
 [YamlPolymorphic("type")]
 [YamlDerivedType("integer", typeof(OpenAPISchemaInteger))]
@@ -74,39 +80,86 @@ public enum ParameterLocation
 [YamlDerivedType("array", typeof(OpenAPISchemaArray))]
 [YamlDerivedType("boolean", typeof(OpenAPISchemaBoolean))]
 [YamlDerivedType("null", typeof(OpenAPISchemaNull))]
-public record OpenAPISchema();
+[YamlDerivedTypeDefault(typeof(OpenAPISchemaObject), FieldToTest = "properties")]
+[YamlDerivedTypeDefault(typeof(OpenAPISchemaArray), FieldToTest = "items")]
+[YamlDerivedTypeDefault(typeof(OpenAPISchema))]
+public record OpenAPISchema()
+{
+    public string? Title { get; init; }
+    public string? Description { get; init; }
 
-public record OpenAPISchemaNull(
-    [property: YamlExtra] Dictionary<string, object?>? Extra
-) : OpenAPISchema;
+    [YamlPropertyName("$ref")]
+    public string? Ref { get; init; }
+
+    [YamlPropertyName("$recursiveRef")]
+    public string? RecursiveRef { get; init; }
+
+    public List<OpenAPISchema>? OneOf { get; init; }
+
+    public List<OpenAPISchema>? AllOf { get; init; }
+
+    public List<OpenAPISchema>? AnyOf { get; init; }
+
+    public bool? Nullable { get; init; }
+
+    [YamlExtra]
+    public Dictionary<string, object>? Extra { get; init; }
+
+    public bool? Deprecated { get; init; }
+
+    public OpenAPISchemaDiscriminator? Discriminator { get; init; }
+
+    public object? Example { get; init; }
+
+    public int? MinItems { get; init; }
+    public int? MaxItems { get; init; }
+
+    public object? Default { get; init; }
+}
+
+public record OpenAPISchemaNull() : OpenAPISchema{};
 
 public record OpenAPISchemaInteger(
-    int? Default,
-    string? Description,
-    // [property: YamlPropertyName("format")] string? Format,
-    // [property: YamlPropertyName("minimum")] int? Minimum,
-    // [property: YamlPropertyName("maximum")] int? Maximum,
-    [property: YamlExtra] Dictionary<string, object?>? Extra
-) : OpenAPISchema;
+// [property: YamlPropertyName("format")] string? Format,
+// [property: YamlPropertyName("minimum")] int? Minimum,
+// [property: YamlPropertyName("maximum")] int? Maximum,
+// [property: YamlExtra] Dictionary<string, object?>? Extra
+) : OpenAPISchema
+{
+    public string? Format { get; init; }
+    public BigInteger? Minimum { get; init; }
+    public BigInteger? Maximum { get; init; }
+    // [property: YamlExtra] Dictionary<string, object?>? Extra
+};
 
 public record OpenAPISchemaNumber(
-    [property: YamlExtra] Dictionary<string, object?>? Extra
-) : OpenAPISchema;
+
+    float? Minimum,
+    float? Maximum
+
+) : OpenAPISchema
+{
+    public string? Format { get; init; }
+    public bool? ExclusiveMinimum { get; init; }
+
+}
 
 public record OpenAPISchemaString(
-    /* TODO: Add support for string and List<string> as variant alternatives */
-    object? Default,
     List<string>? Enum,
-    string? Description,
-    bool? Nullable,
-    string? Example,
     string? Format,
-    // [property: YamlPropertyName("enum")] List<string>? Enum,
-    // [property: YamlPropertyName("pattern")] string? Pattern,
-    [property: YamlExtra] Dictionary<string, object?>? Extra
-) : OpenAPISchema;
+    int? MinLength,
+    int? MaxLength
+// [property: YamlPropertyName("minLength")] int? MinLength = null,
+// [property: YamlPropertyName("enum")] List<string>? Enum,
+// [property: YamlPropertyName("pattern")] string? Pattern,
+// [property: YamlExtra] Dictionary<string, object>? Extra
+) : OpenAPISchema
+{
+}
 
-public record OpenAPISchemaBoolean : OpenAPISchema;
+public record OpenAPISchemaBoolean : OpenAPISchema
+{
+}
 
 
 public record OpenAPIAdditionalPropertiesEmpty(
@@ -114,90 +167,44 @@ public record OpenAPIAdditionalPropertiesEmpty(
 );
 
 public record OpenAPISchemaObject(
-    [property:
-        YamlVariant,
-        YamlVariantTypeObject(typeof(OpenAPISchema), "type"),
-        YamlVariantTypeObject(typeof(OpenAPIRef), "$ref"),
-        YamlVariantTypeObject(typeof(OpenAPIOneOf), "oneOf"),
-        YamlVariantTypeObject(typeof(OpenAPIAnyOf), "anyOf"),
-        YamlVariantTypeObject(typeof(OpenAPIAllOf), "allOf"),
-        YamlVariantTypeObject(typeof(OpenAPISchemaArray), "items"),] // TODO: This seems to be a spec bug.
-    Dictionary<string, object>? Properties,
-    // [property: YamlPropertyName("required")] List<string>? Required
-
+    Dictionary<string, OpenAPISchema>? Properties,
     [property:
         YamlVariant,
         YamlVariantTypeScalar(typeof(bool)),
-        YamlVariantTypeObject(typeof(OpenAPISchema), "type"),
-        YamlVariantTypeObject(typeof(OpenAPIOneOf), "oneOf"),
-        YamlVariantTypeObject(typeof(OpenAPIRef), "$ref"),
-        YamlVariantTypeDefault(typeof(OpenAPIAdditionalPropertiesEmpty))]
+        YamlVariantTypeDefault(typeof(OpenAPISchema))
+    ]
     object? AdditionalProperties,
+
     List<string>? Required,
-    bool? Nullable,
-    [property: YamlExtra] Dictionary<string, object?>? Extra
-) : OpenAPISchema;
+    int? MaxProperties
+
+) : OpenAPISchema
+{
+    public OpenAPISchemaString? PropertyNames { get; init; }
+    public bool? UnevaluatedProperties { get; init; }
+    [YamlPropertyName("$recursiveAnchor")]
+    public bool? RecursiveAnchor { get; init; }
+}
 
 public record OpenAPISchemaArray(
-    [property:
-        YamlVariant,
-        YamlVariantTypeObject(typeof(OpenAPISchema), "type"),
-        YamlVariantTypeObject(typeof(OpenAPIRef), "$ref"),
-        YamlVariantTypeObject(typeof(OpenAPIOneOf), "oneOf"),
-        YamlVariantTypeObject(typeof(OpenAPIAllOf), "allOf")]
-    object Items,
-    // [property: YamlPropertyName("minItems")] int? MinItems = null,
-    // [property: YamlPropertyName("maxItems")] int? MaxItems = null
-    [property: YamlExtra] Dictionary<string, object?>? Extra
-) : OpenAPISchema;
+    OpenAPISchema Items
+// [property: YamlPropertyName("minItems")] int? MinItems = null,
+// [property: YamlPropertyName("maxItems")] int? MaxItems = null
+// [property: YamlExtra] Dictionary<string, object?>? Extra
+) : OpenAPISchema
+{
+    public bool? Optional { get; init; }
+}
 
-public record OpenAPIRef(
-    [property: YamlPropertyName("$ref")] string Ref
-);
 
-public record OpenAPIRecursiveRef(
-    [property: YamlPropertyName("$recursiveRef")] string RecursiveRef
-);
 
-public record OpenAPIOneOf(
-    [property:
-        YamlVariant,
-        YamlVariantTypeObject(typeof(OpenAPISchema), "type"),
-        YamlVariantTypeObject(typeof(OpenAPIRef), "$ref"),
-        YamlVariantTypeObject(typeof(OpenAPIRecursiveRef), "$recursiveRef")]
-    List<object> OneOf,
-    [property: YamlExtra] Dictionary<string, object?> Extra
-);
-
-public record OpenAPIAllOfExtensions(
-    [property:YamlExtra] Dictionary<string, object?> Extra
-);
-
-public record OpenAPIAllOf(
-    [property:
-        YamlVariant,
-        YamlVariantTypeObject(typeof(OpenAPISchema), "type"),
-        YamlVariantTypeObject(typeof(OpenAPIRef), "$ref"),
-        YamlVariantTypeDefault(typeof(OpenAPIAllOfExtensions))]
-    List<object> AllOf,
-    [property: YamlExtra] Dictionary<string, object?> Extra
-);
-
-public record OpenAPIAnyOf(
-    [property:
-        YamlVariant,
-        YamlVariantTypeObject(typeof(OpenAPISchema), "type"),
-        YamlVariantTypeObject(typeof(OpenAPIRef), "$ref"),]
-    List<object> AnyOf,
-    [property: YamlExtra] Dictionary<string, object?> Extra
-);
 
 public record OpenAPIMethodParameters(
     string Name,
     ParameterLocation In,
     string? Description,
     bool? Required,
-    [property: YamlVariant, YamlVariantTypeObject(typeof(OpenAPISchema), "type"), YamlVariantTypeObject(typeof(OpenAPIRef), "$ref")] object? Schema,
+    OpenAPISchema? Schema,
     string? Style,
     bool? Explode,
     bool? AllowReserved,
@@ -205,12 +212,8 @@ public record OpenAPIMethodParameters(
 );
 
 public record OpenAPIMediaTypeObject(
-    [property:
-        YamlVariant,
-        YamlVariantTypeObject(typeof(OpenAPISchema), "type"),
-        YamlVariantTypeObject(typeof(OpenAPIRef), "$ref"),
-        YamlVariantTypeObject(typeof(OpenAPIOneOf), "oneOf")]
-    object? Schema,
+
+    OpenAPISchema? Schema,
     [property: YamlExtra] Dictionary<string, object?> Extra
 );
 
@@ -224,11 +227,7 @@ public record OpenAPIMethodRequestBody(
 public record OpenAPIHeader(
     string? Description,
     bool? Required,
-    [property:
-        YamlVariant,
-        YamlVariantTypeObject(typeof(OpenAPISchema), "type"),
-        YamlVariantTypeObject(typeof(OpenAPIRef), "$ref")]
-    object? Schema,
+    OpenAPISchema? Schema,
     [property: YamlExtra] Dictionary<string, object?> Extra
 );
 
@@ -276,14 +275,7 @@ public record OpenAPITag(
 );
 
 public record OpenAPIComponents(
-    [property:
-        YamlVariant,
-        YamlVariantTypeObject(typeof(OpenAPISchema), "type"),
-        YamlVariantTypeObject(typeof(OpenAPIOneOf), "oneOf"),
-        YamlVariantTypeObject(typeof(OpenAPIAllOf), "allOf"),
-        YamlVariantTypeObject(typeof(OpenAPIAnyOf), "anyOf"),
-        YamlVariantTypeObject(typeof(OpenAPISchemaObject), "properties"),] // TODO: This seems to be a spec bug.
-    Dictionary<string, object>? Schemas,
+    Dictionary<string, OpenAPISchema>? Schemas,
     [property: YamlExtra] Dictionary<string, object?> Extra
 );
 
@@ -351,7 +343,11 @@ public static class Extension
             if (value is not null)
             {
                 Console.WriteLine($"Validating property:  {typeof(T).Name} {property.Name} ({value.GetType().Name})");
-                typeof(Extension).GetMethod("Validate")?.MakeGenericMethod(value.GetType()).Invoke(null, [value]);
+                if (value.GetType().IsClass)
+                {
+                    typeof(Extension).GetMethod("Validate")?.MakeGenericMethod(value.GetType()).Invoke(null, [value]);
+
+                }
 
             }
         }
@@ -362,11 +358,20 @@ public static class Extension
         Console.WriteLine($"Validating dictionary with {obj.Count} entries.");
         foreach (var (key, value) in obj)
         {
+            if (value == null)
+            {
+                Console.WriteLine($"Skipping null value for key: {key}");
+                continue;
+            }
+            Console.WriteLine($"Validating key: {key} ({value.GetType().Name})");
             // if (value is OpenAPIPath)
             // {
             //     Console.WriteLine($"Extra: Validating path {key}");
             // }
-            value.Validate();
+            if (value.GetType().IsClass)
+            {
+                typeof(Extension).GetMethod("Validate")?.MakeGenericMethod(value.GetType()).Invoke(null, [value]);
+            }
         }
     }
 
@@ -375,7 +380,12 @@ public static class Extension
         Console.WriteLine($"Validating collection with {obj.Count} items.");
         foreach (var item in obj)
         {
-            item.Validate();
+            if (item.GetType().IsClass)
+            {
+                typeof(Extension).GetMethod("Validate")?.MakeGenericMethod(item.GetType()).Invoke(null, [item]);
+
+            }
+
         }
     }
 }

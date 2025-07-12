@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -11,6 +12,7 @@ using System.Threading.Tasks;
 using YamlDotNet.RepresentationModel;
 using YAYL.Attributes;
 using YAYL.Reflection;
+using YAYL.Util;
 
 namespace YAYL;
 
@@ -85,7 +87,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 
         if (discriminatorNode.Value is not YamlScalarNode typeNode)
         {
-            if (baseType.GetCustomAttribute<YamlDerivedTypeDefaultAttribute>() is { DerivedType: var defaultDerivedType })
+            if (baseType.GetCustomAttributes<YamlDerivedTypeDefaultAttribute>().Where(x => x.FieldToTest is null || node.ContainsField(x.FieldToTest)).FirstOrDefault() is { DerivedType: var defaultDerivedType })
             {
                 if (defaultDerivedType.IsAbstract)
                 {
@@ -730,6 +732,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             {
                 var t when t == typeof(int) => int.Parse(value),
                 var t when t == typeof(long) => long.Parse(value),
+                var t when t == typeof(BigInteger) => BigInteger.Parse(value, CultureInfo.InvariantCulture),
                 var t when t == typeof(double) => double.Parse(value),
                 var t when t == typeof(float) => float.Parse(value),
                 var t when t == typeof(decimal) => decimal.Parse(value),
