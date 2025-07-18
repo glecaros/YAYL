@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -10,7 +9,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using YamlDotNet.RepresentationModel;
 using YAYL.Attributes;
+using YAYL.Conversion;
 using YAYL.Reflection;
+using YAYL.Util;
 
 namespace YAYL;
 
@@ -62,6 +63,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 {
     private readonly YamlNamingPolicy _namingPolicy = namingPolicy;
     private readonly List<YamlVariableResolver> _variableResolvers = [];
+    private readonly TypeConverterFactory _typeConverterFactory = new();
 
     public void AddVariableResolver(Regex expression, Func<string, CancellationToken, Task<string>> resolver)
     {
@@ -69,8 +71,6 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
     }
 
     public void AddVariableResolver(Regex expression, Func<string, string> resolver) => AddVariableResolver(expression, (v, _) => Task.FromResult(resolver(v)));
-
-    private static string? NormalizeEnumValueName(string? value) => value?.Replace("-", "").Replace("_", "").ToLowerInvariant();
 
     private static Type? GetPolymorphicType(YamlMappingNode node, Type baseType)
     {
@@ -101,9 +101,9 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             throw new YamlParseException($"Type discriminator '{polymorphicAttribute.TypeDiscriminatorPropertyName}' not found or invalid.", node);
         }
 
-        var typeName = NormalizeEnumValueName(typeNode.Value);
+        var typeName = typeNode.Value?.Replace("-", "").Replace("_", "").ToLowerInvariant();
         var derivedTypeAttribute = baseType.GetCustomAttributes<YamlDerivedTypeAttribute>()
-            .FirstOrDefault(x => NormalizeEnumValueName(x.TypeName) == typeName);
+            .FirstOrDefault(x => x.TypeName?.Replace("-", "").Replace("_", "").ToLowerInvariant() == typeName);
 
         if (derivedTypeAttribute is not (var _, var derivedType))
         {
@@ -612,8 +612,8 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 
     private async Task<object?> ConvertScalarToObjectAsync(YamlScalarNode node, HashSet<Type>? allowedTypes, CancellationToken cancellationToken)
     {
-        string[] validNullValues = ["~", "null", "NULL", "Null", "", " "];
-        if (node.Value is not string value || validNullValues.Contains(value))
+
+        if (node.GetValue() is not string value)
         {
             return null;
         }
@@ -625,42 +625,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
             return string.Empty;
         }
 
-        if (bool.TryParse(value, out var boolValue) && (allowedTypes?.Contains(typeof(bool)) ?? true))
-        {
-            return boolValue;
-        }
-
-        if (int.TryParse(value, out var intValue) && (allowedTypes?.Contains(typeof(int)) ?? true))
-        {
-            return intValue;
-        }
-
-        if (long.TryParse(value, out var longValue) && (allowedTypes?.Contains(typeof(long)) ?? true))
-        {
-            return longValue;
-        }
-
-        if (double.TryParse(value, out var doubleValue) && (allowedTypes?.Contains(typeof(double)) ?? true))
-        {
-            return doubleValue;
-        }
-
-        if (DateTimeOffset.TryParse(value, out var dateTimeValue) && (allowedTypes?.Contains(typeof(DateTimeOffset)) ?? true))
-        {
-            return dateTimeValue;
-        }
-
-        if (Guid.TryParse(value, out var guidValue) && (allowedTypes?.Contains(typeof(Guid)) ?? true))
-        {
-            return guidValue;
-        }
-
-        if (allowedTypes?.Contains(typeof(string)) ?? true)
-        {
-            return value;
-        }
-
-        throw new YamlParseException($"Cannot convert scalar value '{value}' to any of the allowed types: {string.Join(", ", allowedTypes?.Select(t => t.Name) ?? [])}", node);
+        return _typeConverterFactory.ConvertWithTypeInferenceAsync(value, allowedTypes, node, cancellationToken);
     }
 
     private async Task<object> ConvertSequenceToObjectAsync(YamlSequenceNode node, YamlContext? context, CancellationToken cancellationToken)
@@ -689,27 +654,22 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 
     private async Task<object?> ConvertScalarNodeAsync(YamlScalarNode node, Type targetType, CancellationToken cancellationToken)
     {
-        var value = node.Value switch
+        var value = node.GetValue() switch
         {
             string v => await ResolveVariablesInStringAsync(v, cancellationToken).ConfigureAwait(false),
-            _ => node.Value,
+            null => null,
         };
 
-        string[] validNullValues = ["~", "null", "NULL", "Null", "", " "];
         try
         {
             if (targetType == typeof(string))
             {
-                if (validNullValues.Contains(value))
-                {
-                    return null;
-                }
                 return value;
             }
 
             if (Nullable.GetUnderlyingType(targetType) is Type underlyingType)
             {
-                if (string.IsNullOrEmpty(value) || validNullValues.Contains(value))
+                if (value is null)
                 {
                     return null;
                 }
@@ -721,26 +681,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
                 throw new YamlParseException($"Cannot convert empty string not-nullable type {targetType.Name}", node);
             }
 
-            if (targetType.IsEnum)
-            {
-                return Enum.Parse(targetType, NormalizeEnumValueName(value)!, true);
-            }
-
-            return targetType switch
-            {
-                var t when t == typeof(int) => int.Parse(value),
-                var t when t == typeof(long) => long.Parse(value),
-                var t when t == typeof(double) => double.Parse(value),
-                var t when t == typeof(float) => float.Parse(value),
-                var t when t == typeof(decimal) => decimal.Parse(value),
-                var t when t == typeof(bool) => bool.Parse(value),
-                var t when t == typeof(Guid) => Guid.Parse(value),
-                var t when t == typeof(DateTime) => DateTime.Parse(value),
-                var t when t == typeof(DateTimeOffset) => DateTimeOffset.Parse(value),
-                var t when t == typeof(TimeSpan) => TimeSpan.Parse(value),
-                var t when TypeDescriptor.GetConverter(t).CanConvertFrom(typeof(string)) => TypeDescriptor.GetConverter(t).ConvertFrom(value),
-                _ => new YamlParseException($"Unsupported scalar type: {targetType.Name}", node),
-            };
+            return _typeConverterFactory.Convert(value, targetType, node, cancellationToken);
         }
         catch (Exception ex) when (ex is not YamlParseException)
         {
