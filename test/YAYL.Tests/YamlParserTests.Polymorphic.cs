@@ -313,7 +313,7 @@ public partial class YamlParserTests
     abstract record SchemaType;
 
     record StringType(string Pattern) : SchemaType;
-    record RefType([property:YamlPropertyName("$ref")] string Ref) : SchemaType;
+    record RefType([property: YamlPropertyName("$ref")] string Ref) : SchemaType;
 
     [Fact]
     public void Parse_PolymorphicDefault_Success()
