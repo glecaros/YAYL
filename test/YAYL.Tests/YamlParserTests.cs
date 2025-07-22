@@ -473,7 +473,8 @@ public partial class YamlParserTests
     [Fact]
     public async Task Parse_VariableResolution_ScalarString_Success()
     {
-        _parser.AddVariableResolver(new Regex(@"\$\{([^}]+)\}"), (varName) => {
+        _parser.AddVariableResolver(new Regex(@"\$\{([^}]+)\}"), (varName) =>
+        {
             return varName == "name" ? "World" : varName;
         });
 
@@ -491,7 +492,8 @@ public partial class YamlParserTests
     [Fact]
     public async Task Parse_VariableResolution_NestedObject_Success()
     {
-        _parser.AddVariableResolver(new Regex(@"\$\{([^}]+)\}"), (varName) => {
+        _parser.AddVariableResolver(new Regex(@"\$\{([^}]+)\}"), (varName) =>
+        {
             return varName == "info" ? "NestedValue" : varName;
         });
 

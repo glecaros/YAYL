@@ -2,7 +2,7 @@ using YAYL.Attributes;
 
 namespace YAYL.Tests;
 
-public partial class YamlParserTests: IDisposable
+public partial class YamlParserTests : IDisposable
 {
     private string _tempDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
 
@@ -45,7 +45,7 @@ public partial class YamlParserTests: IDisposable
 
         var parser = new YamlParser();
 
-        var result = parser.Parse<ObjectWithFilePropertyCurrentDirectory>(yaml, new(){ WorkingDirectory = _tempDirectory });
+        var result = parser.Parse<ObjectWithFilePropertyCurrentDirectory>(yaml, new() { WorkingDirectory = _tempDirectory });
         Assert.NotNull(result);
         Assert.Equal(Path.Combine(_tempDirectory, "content.txt"), result.ContentFile);
     }
@@ -57,7 +57,7 @@ public partial class YamlParserTests: IDisposable
 
         var parser = new YamlParser();
 
-        var result = parser.Parse<ObjectWithFilePropertyFile>(yaml, new(){ FilePath = Path.Combine(_tempDirectory, "subdir", "test.yaml") });
+        var result = parser.Parse<ObjectWithFilePropertyFile>(yaml, new() { FilePath = Path.Combine(_tempDirectory, "subdir", "test.yaml") });
         Assert.NotNull(result);
         Assert.Equal(Path.Combine(_tempDirectory, "content.txt"), result.ContentFile);
     }
@@ -69,7 +69,7 @@ public partial class YamlParserTests: IDisposable
 
         var parser = new YamlParser();
 
-        var result = parser.Parse<ObjectWithFilePropertyCollection>(yaml, new(){ FilePath = Path.Combine(_tempDirectory, "subdir", "test.yaml") });
+        var result = parser.Parse<ObjectWithFilePropertyCollection>(yaml, new() { FilePath = Path.Combine(_tempDirectory, "subdir", "test.yaml") });
         Assert.NotNull(result);
         Assert.Equal([Path.Combine(_tempDirectory, "content.txt"), Path.Combine(_tempDirectory, "content2.txt")], result.ContentFiles);
     }
@@ -97,7 +97,7 @@ public partial class YamlParserTests: IDisposable
 
         var parser = new YamlParser();
         var result = parser.ParseFile<ObjectWithFilePropertyFile>(yamlFile.FilePath,
-         new(){ FilePath = Path.Combine(_tempDirectory, "subdir", "test.yaml") });
+         new() { FilePath = Path.Combine(_tempDirectory, "subdir", "test.yaml") });
 
         Assert.NotNull(result);
         Assert.Equal(Path.Combine(_tempDirectory, "content.txt"), result.ContentFile);
@@ -112,11 +112,13 @@ public partial class YamlParserTests: IDisposable
 
         var parser = new YamlParser();
 
-        using ScopeGuard<string> _e = new(() => {
+        using ScopeGuard<string> _e = new(() =>
+        {
             var oldWorkingDirectory = Environment.CurrentDirectory;
             Environment.CurrentDirectory = _tempDirectory;
             return oldWorkingDirectory;
-        }, oldWorkingDirectory => {
+        }, oldWorkingDirectory =>
+        {
             Environment.CurrentDirectory = oldWorkingDirectory;
         });
 
@@ -137,7 +139,7 @@ public partial class YamlParserTests: IDisposable
         var parser = new YamlParser();
 
         var result = parser.ParseFile<ObjectWithFilePropertyCurrentDirectory>(yamlFile.FilePath,
-            new(){ WorkingDirectory = Path.Combine(_tempDirectory, "other") });
+            new() { WorkingDirectory = Path.Combine(_tempDirectory, "other") });
 
         Assert.NotNull(result);
         Assert.Equal(Path.Combine(_tempDirectory, "other", "subdir", "content.txt"), result.ContentFile);
@@ -150,7 +152,7 @@ public partial class YamlParserTests: IDisposable
 
         var parser = new YamlParser();
 
-        var result = parser.Parse<ObjectWithFilePropertyCurrentDirectory>(yaml, new(){ WorkingDirectory = _tempDirectory });
+        var result = parser.Parse<ObjectWithFilePropertyCurrentDirectory>(yaml, new() { WorkingDirectory = _tempDirectory });
         Assert.NotNull(result);
         Assert.Equal("/content.txt", result.ContentFile);
     }
@@ -162,7 +164,7 @@ public partial class YamlParserTests: IDisposable
 
         var parser = new YamlParser();
 
-        var result = parser.Parse<ObjectWithFilePropertyFile>(yaml, new(){ FilePath = Path.Combine(_tempDirectory, "subdir", "test.yaml") });
+        var result = parser.Parse<ObjectWithFilePropertyFile>(yaml, new() { FilePath = Path.Combine(_tempDirectory, "subdir", "test.yaml") });
         Assert.NotNull(result);
         Assert.Equal("/content.txt", result.ContentFile);
     }
@@ -174,13 +176,13 @@ public partial class YamlParserTests: IDisposable
 
         var parser = new YamlParser();
 
-        var result = parser.Parse<ObjectWithFilePropertyCollection>(yaml, new(){ FilePath = Path.Combine(_tempDirectory, "subdir", "test.yaml") });
+        var result = parser.Parse<ObjectWithFilePropertyCollection>(yaml, new() { FilePath = Path.Combine(_tempDirectory, "subdir", "test.yaml") });
         Assert.NotNull(result);
         Assert.Equal(new List<string> { "/content.txt", "/content2.txt" }, result.ContentFiles);
     }
 
 
-    internal class TestFile: IDisposable
+    internal class TestFile : IDisposable
     {
         public readonly string FilePath;
         public readonly string Content;
@@ -206,7 +208,7 @@ public partial class YamlParserTests: IDisposable
         }
     }
 
-    internal class ScopeGuard<T>(Func<T> init , Action<T> disposeAction) : IDisposable
+    internal class ScopeGuard<T>(Func<T> init, Action<T> disposeAction) : IDisposable
     {
         private readonly Action<T> _disposeAction = disposeAction;
         private T _value = init();

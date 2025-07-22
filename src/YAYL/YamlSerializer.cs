@@ -182,7 +182,7 @@ public class YamlSerializer(YamlNamingPolicy namingPolicy = YamlNamingPolicy.Keb
     {
         var mappingNode = new YamlMappingNode();
         string? discriminatorPropertyName = null;
-        if (type.GetCustomAttribute<YamlPolymorphicAttribute>() is YamlPolymorphicAttribute( string discriminatorProperty ))
+        if (type.GetCustomAttribute<YamlPolymorphicAttribute>() is YamlPolymorphicAttribute(string discriminatorProperty))
         {
             if (type.GetDerivedTypeAttribute() is YamlDerivedTypeAttribute derivedTypeAttribute)
             {
@@ -213,7 +213,7 @@ public class YamlSerializer(YamlNamingPolicy namingPolicy = YamlNamingPolicy.Keb
             }
             if (Nullable.GetUnderlyingType(property.PropertyType) is Type underlyingType)
             {
-                var hasValue = (bool) property.PropertyType.GetProperty("HasValue")?.GetValue(value)!;
+                var hasValue = (bool)property.PropertyType.GetProperty("HasValue")?.GetValue(value)!;
                 if (hasValue)
                 {
                     var valueProperty = property.PropertyType.GetProperty("Value");
