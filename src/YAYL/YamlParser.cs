@@ -85,7 +85,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
 
         if (discriminatorNode.Value is not YamlScalarNode typeNode)
         {
-            if (baseType.GetCustomAttribute<YamlDerivedTypeDefaultAttribute>() is { DerivedType: var defaultDerivedType })
+            if (baseType.GetCustomAttributes<YamlDerivedTypeDefaultAttribute>().FirstOrDefault(x => x.FieldToTest is null || node.ContainsField(x.FieldToTest)) is { DerivedType: var defaultDerivedType })
             {
                 if (defaultDerivedType.IsAbstract)
                 {
