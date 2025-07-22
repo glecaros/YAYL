@@ -334,4 +334,163 @@ public partial class YamlParserTests
         var refType = (RefType)result[1];
         Assert.Equal("#/components/schemas/Cat", refType.Ref);
     }
+
+    [YamlPolymorphic("kind")]
+    [YamlDerivedType("deployment", typeof(Deployment))]
+    [YamlDerivedType("service", typeof(Service))]
+    [YamlDerivedTypeDefault(typeof(Secret), FieldToTest = "secret-type")]
+    [YamlDerivedTypeDefault(typeof(ConfigMap), FieldToTest = "data")]
+    abstract record KubernetesResource(string? Kind, string Name);
+
+    record Deployment(string? Kind, string Name, string Image) : KubernetesResource(Kind, Name);
+    record Service(string? Kind, string Name, int Port) : KubernetesResource(Kind, Name);
+    record ConfigMap(string? Kind, string Name, Dictionary<string, string> Data) : KubernetesResource(Kind, Name);
+    record Secret(string? Kind, string Name, string SecretType, Dictionary<string, string> Data) : KubernetesResource(Kind, Name);
+
+    [Fact]
+    public void Parse_PolymorphicDefaultWithFieldToTest_ConfigMap_Success()
+    {
+        var yaml = @"
+            name: my-config
+            data:
+              key1: value1
+              key2: value2";
+
+        var result = _parser.Parse<KubernetesResource>(yaml);
+
+        Assert.NotNull(result);
+        Assert.IsType<ConfigMap>(result);
+        var configMap = (ConfigMap)result;
+        Assert.Equal("my-config", configMap.Name);
+        Assert.Equal(2, configMap.Data.Count);
+        Assert.Equal("value1", configMap.Data["key1"]);
+        Assert.Equal("value2", configMap.Data["key2"]);
+    }
+
+    [Fact]
+    public void Parse_PolymorphicDefaultWithFieldToTest_Secret_Success()
+    {
+        var yaml = @"
+            name: my-secret
+            secret-type: Opaque
+            data:
+              username: admin
+              password: secret";
+
+        var result = _parser.Parse<KubernetesResource>(yaml);
+
+        Assert.NotNull(result);
+        Assert.IsType<Secret>(result);
+        var secret = (Secret)result;
+        Assert.Equal("my-secret", secret.Name);
+        Assert.Equal("Opaque", secret.SecretType);
+        Assert.Equal(2, secret.Data.Count);
+        Assert.Equal("admin", secret.Data["username"]);
+        Assert.Equal("secret", secret.Data["password"]);
+    }
+
+    [Fact]
+    public void Parse_PolymorphicDefaultWithFieldToTest_ExplicitType_Success()
+    {
+        var yaml = @"
+            kind: deployment
+            name: my-app
+            image: nginx:latest";
+
+        var result = _parser.Parse<KubernetesResource>(yaml);
+
+        Assert.NotNull(result);
+        Assert.IsType<Deployment>(result);
+        var deployment = (Deployment)result;
+        Assert.Equal("deployment", deployment.Kind);
+        Assert.Equal("my-app", deployment.Name);
+        Assert.Equal("nginx:latest", deployment.Image);
+    }
+
+    [Fact]
+    public void Parse_PolymorphicDefaultWithFieldToTest_NoMatchingField_ThrowsException()
+    {
+        var yaml = @"
+            name: unknown-resource
+            unknownField: someValue";
+
+        Assert.Throws<YamlParseException>(() => _parser.Parse<KubernetesResource>(yaml));
+    }
+
+    [YamlPolymorphic("format")]
+    [YamlDerivedType("json", typeof(JsonConfig))]
+    [YamlDerivedTypeDefault(typeof(YamlConfig), FieldToTest = "yaml-specific")]
+    [YamlDerivedTypeDefault(typeof(XmlConfig), FieldToTest = "xml-specific")]
+    [YamlDerivedTypeDefault(typeof(DefaultConfig))]
+    abstract record ConfigFormat(string Name);
+
+    record JsonConfig(string Name, bool PrettyPrint) : ConfigFormat(Name);
+    record YamlConfig(string Name, bool YamlSpecific) : ConfigFormat(Name);
+    record XmlConfig(string Name, string XmlSpecific) : ConfigFormat(Name);
+    record DefaultConfig(string Name, string? Content = null) : ConfigFormat(Name);
+
+    [Fact]
+    public void Parse_MultipleDefaultsWithFieldToTest_YamlSpecific_Success()
+    {
+        var yaml = @"
+            name: my-yaml-config
+            yaml-specific: true";
+
+        var result = _parser.Parse<ConfigFormat>(yaml);
+
+        Assert.NotNull(result);
+        Assert.IsType<YamlConfig>(result);
+        var yamlConfig = (YamlConfig)result;
+        Assert.Equal("my-yaml-config", yamlConfig.Name);
+        Assert.True(yamlConfig.YamlSpecific);
+    }
+
+    [Fact]
+    public void Parse_MultipleDefaultsWithFieldToTest_XmlSpecific_Success()
+    {
+        var yaml = @"
+            name: my-xml-config
+            xml-specific: namespace";
+
+        var result = _parser.Parse<ConfigFormat>(yaml);
+
+        Assert.NotNull(result);
+        Assert.IsType<XmlConfig>(result);
+        var xmlConfig = (XmlConfig)result;
+        Assert.Equal("my-xml-config", xmlConfig.Name);
+        Assert.Equal("namespace", xmlConfig.XmlSpecific);
+    }
+
+    [Fact]
+    public void Parse_MultipleDefaultsWithFieldToTest_FallbackDefault_Success()
+    {
+        var yaml = @"
+            name: my-default-config
+            content: some content here";
+
+        var result = _parser.Parse<ConfigFormat>(yaml);
+
+        Assert.NotNull(result);
+        Assert.IsType<DefaultConfig>(result);
+        var defaultConfig = (DefaultConfig)result;
+        Assert.Equal("my-default-config", defaultConfig.Name);
+        Assert.Equal("some content here", defaultConfig.Content);
+    }
+
+    [Fact]
+    public void Parse_MultipleDefaultsWithFieldToTest_ExplicitType_Success()
+    {
+        var yaml = @"
+            format: json
+            name: my-json-config
+            pretty-print: true";
+
+        var result = _parser.Parse<ConfigFormat>(yaml);
+
+        Assert.NotNull(result);
+        Assert.IsType<JsonConfig>(result);
+        var jsonConfig = (JsonConfig)result;
+        Assert.Equal("my-json-config", jsonConfig.Name);
+        Assert.True(jsonConfig.PrettyPrint);
+    }
 }
