@@ -3,6 +3,7 @@
 ## [1.8.1] - 2025-07-22
 
 - **YamlDerivedTypeDefaultAttribute:** Added functionality to have a field presence test when deciding which default to use.
+- **Added BigInteger:** Scalars can now be parsed into `BigInteger`.
 
 ## [1.8.0] - 2025-07-10
 

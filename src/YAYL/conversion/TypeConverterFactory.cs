@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Numerics;
 using System.Threading;
 using YamlDotNet.RepresentationModel;
 
@@ -19,6 +20,7 @@ internal class TypeConverterFactory
         new TypeConverter<float>((s, _) => float.Parse(s)),
         new TypeConverter<decimal>((s, _) => decimal.Parse(s)),
         new TypeConverter<Guid>((s, _) => Guid.Parse(s)),
+        new TypeConverter<BigInteger>((s, _) => BigInteger.Parse(s)),
         new TypeConverter<DateTime>((s, _) => DateTime.Parse(s)),
         new TypeConverter<DateTimeOffset>((s, _) => DateTimeOffset.Parse(s)),
         new TypeConverter<TimeSpan>((s, _) => TimeSpan.Parse(s)),
