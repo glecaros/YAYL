@@ -4,24 +4,24 @@ using YamlDotNet.RepresentationModel;
 
 namespace YAYL.Conversion;
 
-public class TypeConverter<T>(Func<string, Type, T> converter) : ITypeConverter
+public class TypeConverter<T>(Func<string, Type, (bool, T?)> converter) : ITypeConverter
 {
+
     public Type TargetType => typeof(T);
 
     public virtual bool CanConvert(Type targetType) => targetType == TargetType;
 
-    private readonly Func<string, Type, T> _converter = converter;
+    private readonly Func<string, Type, (bool, T?)> _converter = converter;
 
-    public object? Convert(string value, Type targetType, YamlNode node, CancellationToken cancellationToken)
+    public bool TryConvert(string value, Type targetType, YamlNode node, out object? result)
     {
-        try
+        var (success, typedResult) = _converter(value, targetType);
+        if (success)
         {
-            return _converter(value, targetType);
+            result = typedResult;
+            return true;
         }
-        catch (Exception ex)
-        {
-            throw new YamlParseException($"Failed to convert '{value}' to type {targetType.Name} ({node.Start.Line}:{node.Start.Column})", node, ex);
-        }
+        result = null;
+        return false;
     }
-
 }

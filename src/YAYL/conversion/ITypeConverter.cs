@@ -11,5 +11,5 @@ public interface ITypeConverter
 
     bool CanConvert(Type targetType);
 
-    object? Convert(string value, Type targetType, YamlNode node, CancellationToken cancellationToken);
+    bool TryConvert(string value, Type targetType, YamlNode node, out object? result);
 }
