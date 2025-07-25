@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.8.2] - 2025-07-25
+
+- **Fix parser performance:** Fixing issue that was causing performance degradation when converting using type inference.
+
 ## [1.8.1] - 2025-07-22
 
 - **YamlDerivedTypeDefaultAttribute:** Added functionality to have a field presence test when deciding which default to use.

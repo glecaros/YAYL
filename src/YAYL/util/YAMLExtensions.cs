@@ -20,9 +20,4 @@ internal static class YAMLExtensions
         }
         return node.Value;
     }
-
-    public static bool ContainsField(this YamlMappingNode mapping, string fieldName)
-    {
-        return mapping.Children.ContainsKey(new YamlScalarNode(fieldName));
-    }
 }

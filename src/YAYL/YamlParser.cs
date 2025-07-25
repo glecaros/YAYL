@@ -681,7 +681,7 @@ public class YamlParser(YamlNamingPolicy namingPolicy = YamlNamingPolicy.KebabCa
                 throw new YamlParseException($"Cannot convert empty string not-nullable type {targetType.Name}", node);
             }
 
-            return _typeConverterFactory.Convert(value, targetType, node, cancellationToken);
+            return _typeConverterFactory.Convert(value, targetType, node);
         }
         catch (Exception ex) when (ex is not YamlParseException)
         {

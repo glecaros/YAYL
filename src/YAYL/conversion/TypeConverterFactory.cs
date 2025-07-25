@@ -12,22 +12,22 @@ internal class TypeConverterFactory
 {
     private readonly List<ITypeConverter> _converters =
     [
-        new TypeConverter<string>((s, _) => s),
-        new TypeConverter<bool>((s, _) => bool.Parse(s)),
-        new TypeConverter<int>((s, _) => int.Parse(s)),
-        new TypeConverter<long>((s, _) => long.Parse(s)),
-        new TypeConverter<double>((s, _) => double.Parse(s)),
-        new TypeConverter<float>((s, _) => float.Parse(s)),
-        new TypeConverter<decimal>((s, _) => decimal.Parse(s)),
-        new TypeConverter<Guid>((s, _) => Guid.Parse(s)),
-        new TypeConverter<BigInteger>((s, _) => BigInteger.Parse(s)),
-        new TypeConverter<DateTime>((s, _) => DateTime.Parse(s)),
-        new TypeConverter<DateTimeOffset>((s, _) => DateTimeOffset.Parse(s)),
-        new TypeConverter<TimeSpan>((s, _) => TimeSpan.Parse(s)),
+        new TypeConverter<string>((s, _) => (true, s)),
+        new TypeConverter<bool>((s, _) => (bool.TryParse(s, out var v), v)),
+        new TypeConverter<int>((s, _) => (int.TryParse(s, out var v), v)),
+        new TypeConverter<long>((s, _) => (long.TryParse(s, out var v), v)),
+        new TypeConverter<double>((s, _) => (double.TryParse(s, out var v), v)),
+        new TypeConverter<float>((s, _) => (float.TryParse(s, out var v), v)),
+        new TypeConverter<decimal>((s, _) => (decimal.TryParse(s, out var v), v)),
+        new TypeConverter<Guid>((s, _) => (Guid.TryParse(s, out var v), v)),
+        new TypeConverter<BigInteger>((s, _) => (BigInteger.TryParse(s, out var v), v)),
+        new TypeConverter<DateTime>((s, _) => (DateTime.TryParse(s, out var v), v)),
+        new TypeConverter<DateTimeOffset>((s, _) => (DateTimeOffset.TryParse(s, out var v), v)),
+        new TypeConverter<TimeSpan>((s, _) => (TimeSpan.TryParse(s, out var v), v)),
         new EnumConverter(),
     ];
 
-    public object? Convert(string value, Type targetType, YamlNode node, CancellationToken cancellationToken)
+    public object? Convert(string value, Type targetType, YamlNode node)
     {
         Type actualTargetType = targetType;
         if (Nullable.GetUnderlyingType(targetType) is Type underlyingType)
@@ -38,7 +38,14 @@ internal class TypeConverterFactory
         var converter = _converters.FirstOrDefault(c => c.CanConvert(actualTargetType));
         if (converter != null)
         {
-            return converter.Convert(value, actualTargetType, node, cancellationToken);
+            if (converter.TryConvert(value, actualTargetType, node, out var result))
+            {
+                return result;
+            }
+            else
+            {
+                throw new YamlParseException($"Failed to convert '{value}' to type {targetType.Name} ({node.Start.Line}:{node.Start.Column})", node);
+            }
         }
 
         if (TypeDescriptor.GetConverter(actualTargetType).CanConvertFrom(typeof(string)))
@@ -76,13 +83,9 @@ internal class TypeConverterFactory
                 var converter = _converters.FirstOrDefault(c => c.CanConvert(type));
                 if (converter is not null)
                 {
-                    try
+                    if (converter.TryConvert(value, type, node, out var result))
                     {
-                        return converter.Convert(value, type, node, cancellationToken);
-                    }
-                    catch
-                    {
-                        continue;
+                        return result;
                     }
                 }
             }
