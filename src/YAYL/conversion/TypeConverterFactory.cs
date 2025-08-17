@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
+using System.Text.RegularExpressions;
 using System.Threading;
 using YamlDotNet.RepresentationModel;
 
@@ -24,6 +25,7 @@ internal class TypeConverterFactory
         new TypeConverter<DateTime>((s, _) => (DateTime.TryParse(s, out var v), v)),
         new TypeConverter<DateTimeOffset>((s, _) => (DateTimeOffset.TryParse(s, out var v), v)),
         new TypeConverter<TimeSpan>((s, _) => (TimeSpan.TryParse(s, out var v), v)),
+        new TypeConverter<Regex>((s, _) => (true, new Regex(s))),
         new EnumConverter(),
     ];
 

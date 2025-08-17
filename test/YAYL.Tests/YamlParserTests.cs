@@ -505,4 +505,16 @@ public partial class YamlParserTests
         Assert.NotNull(result);
         Assert.Equal("Value is NestedValue", result.Nested.Info);
     }
+
+    record ObjectWithRegex(Regex Pattern);
+
+    [Fact]
+    public void Parse_RegexProperty_Success()
+    {
+        var yaml = "pattern: ^[a-zA-Z0-9]+$";
+        var result = _parser.Parse<ObjectWithRegex>(yaml);
+        Assert.NotNull(result);
+        Assert.NotNull(result.Pattern);
+        Assert.Equal("^[a-zA-Z0-9]+$", result.Pattern.ToString());
+    }
 }

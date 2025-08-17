@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.9.0] - 2025-08-16
+
+- **Added support for Regex:** Regex fields can now be parsed.
+
 ## [1.8.2] - 2025-07-25
 
 - **Fix parser performance:** Fixing issue that was causing performance degradation when converting using type inference.
